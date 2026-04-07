@@ -56,6 +56,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { AutoAcceptProvider, useAutoAccept } from "./context/auto-accept"
 import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { createTuiApi, TuiPluginRuntime, type RouteMap } from "./plugin"
@@ -224,11 +225,13 @@ export function tui(input: {
                                   <DialogProvider>
                                     <CommandProvider>
                                       <FrecencyProvider>
-                                        <PromptHistoryProvider>
-                                          <PromptRefProvider>
-                                            <App onSnapshot={input.onSnapshot} />
-                                          </PromptRefProvider>
-                                        </PromptHistoryProvider>
+                                         <PromptHistoryProvider>
+                                           <PromptRefProvider>
+                                             <AutoAcceptProvider>
+                                               <App onSnapshot={input.onSnapshot} />
+                                             </AutoAcceptProvider>
+                                           </PromptRefProvider>
+                                         </PromptHistoryProvider>
                                       </FrecencyProvider>
                                     </CommandProvider>
                                   </DialogProvider>
@@ -300,6 +303,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     .finally(() => {
       setReady(true)
     })
+
+  const autoAccept = useAutoAccept()
 
   useKeyboard((evt) => {
     if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
@@ -803,6 +808,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const current = kv.get("diff_wrap_mode", "word")
         kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
+        dialog.clear()
+      },
+    },
+    {
+      title: autoAccept.autoaccept() === "none" ? "Enable auto-accept edits" : "Disable auto-accept edits",
+      value: "permission.auto_accept.toggle",
+      keybind: "permission_auto_accept_toggle",
+      search: "toggle permissions auto accept",
+      category: "Agent",
+      onSelect: (dialog) => {
+        autoAccept.setAutoaccept((prev) => (prev === "none" ? "edit" : "none"))
         dialog.clear()
       },
     },

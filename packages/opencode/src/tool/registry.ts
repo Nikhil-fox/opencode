@@ -1,4 +1,5 @@
 import { PlanExitTool } from "./plan"
+import { ArchitectExitTool } from "./architect"
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
@@ -153,6 +154,7 @@ export namespace ToolRegistry {
       const lsp = yield* build(LspTool)
       const batch = yield* build(BatchTool)
       const plan = yield* build(PlanExitTool)
+      const architect = yield* build(ArchitectExitTool)
 
       const all = Effect.fn("ToolRegistry.all")(function* (custom: Tool.Info[]) {
         const cfg = yield* config.get()
@@ -177,6 +179,7 @@ export namespace ToolRegistry {
           ...(Flag.OPENCODE_EXPERIMENTAL_LSP_TOOL ? [lsp] : []),
           ...(cfg.experimental?.batch_tool === true ? [batch] : []),
           ...(Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [plan] : []),
+          ...(Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [architect] : []),
           ...custom,
         ]
       })

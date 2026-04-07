@@ -668,6 +668,11 @@ export namespace Config {
       agent_list: z.string().optional().default("<leader>a").describe("List agents"),
       agent_cycle: z.string().optional().default("tab").describe("Next agent"),
       agent_cycle_reverse: z.string().optional().default("shift+tab").describe("Previous agent"),
+      permission_auto_accept_toggle: z
+        .string()
+        .optional()
+        .default("ctrl+a")
+        .describe("Toggle auto-accept mode for edit permissions"),
       variant_cycle: z.string().optional().default("ctrl+t").describe("Cycle model variants"),
       input_clear: z.string().optional().default("ctrl+c").describe("Clear input field"),
       input_paste: z.string().optional().default("ctrl+v").describe("Paste from clipboard"),
@@ -685,12 +690,12 @@ export namespace Config {
       input_select_right: z.string().optional().default("shift+right").describe("Select right in input"),
       input_select_up: z.string().optional().default("shift+up").describe("Select up in input"),
       input_select_down: z.string().optional().default("shift+down").describe("Select down in input"),
-      input_line_home: z.string().optional().default("ctrl+a").describe("Move to start of line in input"),
+      input_line_home: z.string().optional().default("ctrl+s").describe("Move to start of line in input"),
       input_line_end: z.string().optional().default("ctrl+e").describe("Move to end of line in input"),
       input_select_line_home: z
         .string()
         .optional()
-        .default("ctrl+shift+a")
+        .default("ctrl+shift+s")
         .describe("Select to start of line in input"),
       input_select_line_end: z.string().optional().default("ctrl+shift+e").describe("Select to end of line in input"),
       input_visual_line_home: z.string().optional().default("alt+a").describe("Move to start of visual line in input"),
@@ -698,7 +703,7 @@ export namespace Config {
       input_select_visual_line_home: z
         .string()
         .optional()
-        .default("alt+shift+a")
+        .default("alt+shift+s")
         .describe("Select to start of visual line in input"),
       input_select_visual_line_end: z
         .string()

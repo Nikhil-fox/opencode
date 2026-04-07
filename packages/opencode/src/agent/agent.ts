@@ -13,6 +13,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -143,6 +144,33 @@ export namespace Agent {
               ),
               mode: "primary",
               native: true,
+            },
+            architect: {
+              name: "architect",
+              description: "Software architect mode for deep thinking, research, and design before implementation. Use this for complex features, architectural decisions, or when thorough analysis is needed.",
+              options: {},
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  question: "allow",
+                  plan_exit: "allow",
+                  architect_exit: "allow",
+                  external_directory: {
+                    [path.join(Global.Path.data, "plans", "*")]: "allow",
+                  },
+                  edit: {
+                    "*": "deny",
+                    [path.join(".opencode", "plans", "*.md")]: "allow",
+                    [path.join(".opencode", "architect", "*.md")]: "allow",
+                    [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
+                    [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("architect", "*.md")))]: "allow",
+                  },
+                }),
+                user,
+              ),
+              mode: "primary",
+              native: true,
+              prompt: PROMPT_ARCHITECT,
             },
             general: {
               name: "general",

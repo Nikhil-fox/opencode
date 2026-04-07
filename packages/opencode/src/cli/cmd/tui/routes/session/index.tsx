@@ -83,6 +83,7 @@ import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { getScrollAcceleration } from "../../util/scroll"
 import { TuiPluginRuntime } from "../../plugin"
+import { useAutoAccept } from "../../context/auto-accept"
 
 addDefaultParsers(parsers.parsers)
 
@@ -132,6 +133,23 @@ export function Session() {
   })
   const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
+
+  const autoAccept = useAutoAccept()
+
+  // Auto-accept permissions when toggle is enabled
+  createEffect(() => {
+    const perms = permissions()
+    if (autoAccept.autoaccept() === "none" || perms.length === 0) return
+
+    for (const perm of perms) {
+      if (perm.permission === "edit") {
+        sdk.client.permission.reply({
+          reply: "once",
+          requestID: perm.id,
+        })
+      }
+    }
+  })
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -1419,7 +1437,11 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const content = createMemo(() => {
     // Filter out redacted reasoning chunks from OpenRouter
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
-    return props.part.text.replace("[REDACTED]", "").trim()
+    // Filter out "Thinking from previous turn" meta-text
+    return props.part.text
+      .replace("[REDACTED]", "")
+      .replace(/\[Thinking from previous turn\]/g, "")
+      .trim()
   })
   return (
     <Show when={content() && ctx.showThinking()}>

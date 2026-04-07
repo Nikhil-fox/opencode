@@ -36,6 +36,7 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "@tui/util/provider-origin"
+import { useAutoAccept } from "../../context/auto-accept"
 
 export type PromptProps = {
   sessionID?: string
@@ -104,6 +105,7 @@ export function Prompt(props: PromptProps) {
     return consoleManagedProviderLabel(sync.data.console_state.consoleManagedProviders, current.providerID, provider)
   })
   const hasRightContent = createMemo(() => Boolean(props.right || activeOrgName()))
+  const autoAccept = useAutoAccept()
 
   function promptModelWarning() {
     toast.show({
@@ -1114,6 +1116,9 @@ export function Prompt(props: PromptProps) {
                     >
                       {`${CONSOLE_MANAGED_ICON} ${activeOrgName()}`}
                     </text>
+                  </Show>
+                  <Show when={autoAccept.autoaccept() === "edit"}>
+                    <text fg={theme.success}>auto-accept</text>
                   </Show>
                 </box>
               </Show>

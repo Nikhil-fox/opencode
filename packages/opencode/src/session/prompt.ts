@@ -18,6 +18,7 @@ import { SystemPrompt } from "./system"
 import { Instruction } from "./instruction"
 import { Plugin } from "../plugin"
 import PROMPT_PLAN from "../session/prompt/plan.txt"
+import PROMPT_ARCHITECT from "../session/prompt/architect.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { ToolRegistry } from "../tool/registry"
@@ -382,6 +383,87 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           synthetic: true,
         })
         userMessage.parts.push(part)
+
+        // Handle architect mode - switching from architect to build
+        if (input.agent.name !== "architect" && assistantMessage?.info.agent === "architect") {
+          const architect = Session.architect(input.session)
+          if (!(yield* fsys.existsSafe(architect))) return input.messages
+          const part = yield* sessions.updatePart({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text:
+              BUILD_SWITCH + "\n\n" + `An architectural design file exists at ${architect}. You should execute on the design defined within it`,
+            synthetic: true,
+          })
+          userMessage.parts.push(part)
+          return input.messages
+        }
+
+        // Handle architect mode - entering architect mode
+        if (input.agent.name === "architect" && assistantMessage?.info.agent !== "architect") {
+          const architect = Session.architect(input.session)
+          const exists = yield* fsys.existsSafe(architect)
+          if (!exists) yield* fsys.ensureDir(path.dirname(architect)).pipe(Effect.catch(Effect.die))
+          const part = yield* sessions.updatePart({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text: `<system-reminder>
+Architect mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the architect file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+
+## Architect File Info:
+${exists ? `An architectural design file already exists at ${architect}. You can read it and make incremental edits using the edit tool.` : `No architect file exists yet. You should create your design at ${architect} using the write tool.`}
+You should build your design incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+
+## Architect Workflow
+
+### Phase 1: Deep Understanding
+Goal: Gain a comprehensive understanding of the user's request and the existing codebase.
+
+1. Use the explore agent to thoroughly research the codebase
+2. Identify existing patterns, conventions, and architecture
+3. Understand the full scope and implications of the request
+4. Ask clarifying questions about requirements, edge cases, and constraints
+
+### Phase 2: Research & Analysis
+Goal: Research existing solutions and analyze the problem space.
+
+1. Search for similar implementations in the codebase
+2. Review documentation and architecture decision records
+3. Identify all affected components and dependencies
+4. Consider performance, security, and maintainability implications
+
+### Phase 3: Design
+Goal: Create a comprehensive architectural design.
+
+1. Design the solution following established patterns
+2. Consider all edge cases and error scenarios
+3. Plan for testing and observability
+4. Document trade-offs and decisions
+
+### Phase 4: Final Design
+Goal: Write your final design to the architect file.
+
+- Include the architectural overview and key decisions
+- Document the implementation approach
+- List all files that will need to be modified
+- Include a verification plan
+
+### Phase 5: Call architect_exit tool
+At the very end of your turn, once you have asked the user questions and are happy with your final design file - you should always call architect_exit to indicate to the user that you are done with the architectural phase.
+This is critical - your turn should only end with either asking the user a question or calling architect_exit.
+
+NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched design to the user, and tie any loose ends before implementation begins.
+</system-reminder>`,
+            synthetic: true,
+          })
+          userMessage.parts.push(part)
+          return input.messages
+        }
+
         return input.messages
       })
 
