@@ -335,6 +335,7 @@ export namespace File {
       limit?: number
       dirs?: boolean
       type?: "file" | "directory"
+      additionalDirectories?: string[]
     }) => Effect.Effect<string[]>
   }
 
@@ -353,7 +354,28 @@ export namespace File {
         ),
       )
 
-      const scan = Effect.fn("File.scan")(function* () {
+      const scanAdditionalDirectory = Effect.fn("File.scanAdditional")(function* (dir: string) {
+        const result: Entry = { files: [], dirs: [] }
+        const files = yield* Effect.promise(() => Array.fromAsync(Ripgrep.files({ cwd: dir })))
+        const seen = new Set<string>()
+        for (const file of files) {
+          const absolute = path.isAbsolute(file) ? file : path.join(dir, file)
+          result.files.push(absolute)
+          let current = absolute
+          while (true) {
+            const parent = path.dirname(current)
+            if (parent === dir) break
+            if (parent === current) break
+            current = parent
+            if (seen.has(current)) continue
+            seen.add(current)
+            result.dirs.push(current + "/")
+          }
+        }
+        return result
+      })
+
+      const scan = Effect.fn("File.scan")(function* (additionalDirectories?: string[]) {
         if (Instance.directory === path.parse(Instance.directory).root) return
         const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
         const next: Entry = { files: [], dirs: [] }
@@ -396,6 +418,15 @@ export namespace File {
               seen.add(dir)
               next.dirs.push(dir + "/")
             }
+          }
+        }
+
+        // Scan additional directories
+        if (additionalDirectories) {
+          for (const dir of additionalDirectories) {
+            const additional = yield* scanAdditionalDirectory(dir)
+            next.files.push(...additional.files)
+            next.dirs.push(...additional.dirs)
           }
         }
 
@@ -628,6 +659,7 @@ export namespace File {
         limit?: number
         dirs?: boolean
         type?: "file" | "directory"
+        additionalDirectories?: string[]
       }) {
         yield* ensure()
         const { cache } = yield* InstanceState.get(state)
@@ -635,17 +667,31 @@ export namespace File {
         const query = input.query.trim()
         const limit = input.limit ?? 100
         const kind = input.type ?? (input.dirs === false ? "file" : "all")
-        log.info("search", { query, kind })
+        log.info("search", { query, kind, additionalDirs: input.additionalDirectories?.length ?? 0 })
 
         const preferHidden = query.startsWith(".") || query.includes("/.")
 
-        if (!query) {
-          if (kind === "file") return cache.files.slice(0, limit)
-          return sortHiddenLast(cache.dirs.toSorted(), preferHidden).slice(0, limit)
+        // Collect files and dirs from additional directories
+        const additionalFiles: string[] = []
+        const additionalDirs: string[] = []
+        if (input.additionalDirectories && input.additionalDirectories.length > 0) {
+          for (const dir of input.additionalDirectories) {
+            const result = yield* scanAdditionalDirectory(dir)
+            additionalFiles.push(...result.files)
+            additionalDirs.push(...result.dirs)
+          }
         }
 
-        const items =
-          kind === "file" ? cache.files : kind === "directory" ? cache.dirs : [...cache.files, ...cache.dirs]
+        // Merge main cache with additional directories
+        const allFiles = [...cache.files, ...additionalFiles]
+        const allDirs = [...cache.dirs, ...additionalDirs]
+
+        if (!query) {
+          if (kind === "file") return allFiles.slice(0, limit)
+          return sortHiddenLast(allDirs.toSorted(), preferHidden).slice(0, limit)
+        }
+
+        const items = kind === "file" ? allFiles : kind === "directory" ? allDirs : [...allFiles, ...allDirs]
 
         const searchLimit = kind === "directory" && !preferHidden ? limit * 20 : limit
         const sorted = fuzzysort.go(query, items, { limit: searchLimit }).map((item) => item.target)
@@ -680,7 +726,7 @@ export namespace File {
     return runPromise((svc) => svc.list(dir))
   }
 
-  export async function search(input: { query: string; limit?: number; dirs?: boolean; type?: "file" | "directory" }) {
+  export async function search(input: { query: string; limit?: number; dirs?: boolean; type?: "file" | "directory"; additionalDirectories?: string[] }) {
     return runPromise((svc) => svc.search(input))
   }
 }

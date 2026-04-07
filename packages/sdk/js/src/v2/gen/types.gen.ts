@@ -4429,6 +4429,7 @@ export type FindFilesData = {
     dirs?: "true" | "false"
     type?: "file" | "directory"
     limit?: number
+    sessionID?: string
   }
   url: "/find/file"
 }

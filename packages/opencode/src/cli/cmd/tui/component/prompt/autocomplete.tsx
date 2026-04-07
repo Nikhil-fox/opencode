@@ -222,8 +222,8 @@ export function Autocomplete(props: {
   }
 
   const [files] = createResource(
-    () => search(),
-    async (query) => {
+    () => ({ search: search(), sessionID: props.sessionID }),
+    async ({ search: query, sessionID }) => {
       if (!store.visible || store.visible === "/") return []
 
       const { lineRange, baseQuery } = extractLineRange(query ?? "")
@@ -231,6 +231,7 @@ export function Autocomplete(props: {
       // Get files from SDK
       const result = await sdk.client.find.files({
         query: baseQuery,
+        sessionID,
       })
 
       const options: AutocompleteOption[] = []

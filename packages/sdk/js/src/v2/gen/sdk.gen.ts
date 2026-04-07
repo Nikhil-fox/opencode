@@ -2956,6 +2956,7 @@ export class Find extends HeyApiClient {
       dirs?: "true" | "false"
       type?: "file" | "directory"
       limit?: number
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2970,6 +2971,7 @@ export class Find extends HeyApiClient {
             { in: "query", key: "dirs" },
             { in: "query", key: "type" },
             { in: "query", key: "limit" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
