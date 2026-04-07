@@ -11,13 +11,18 @@ type Options = {
   kind?: Kind
 }
 
-export async function assertExternalDirectory(ctx: Tool.Context, target?: string, options?: Options) {
+export async function assertExternalDirectory(
+  ctx: Tool.Context,
+  target?: string,
+  options?: Options,
+  additionalDirectories?: string[],
+) {
   if (!target) return
 
   if (options?.bypass) return
 
   const full = process.platform === "win32" ? AppFileSystem.normalizePath(target) : target
-  if (Instance.containsPath(full)) return
+  if (Instance.containsPath(full, additionalDirectories)) return
 
   const kind = options?.kind ?? "file"
   const dir = kind === "directory" ? full : path.dirname(full)
@@ -41,6 +46,7 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
   ctx: Tool.Context,
   target?: string,
   options?: Options,
+  additionalDirectories?: string[],
 ) {
-  yield* Effect.promise(() => assertExternalDirectory(ctx, target, options))
+  yield* Effect.promise(() => assertExternalDirectory(ctx, target, options, additionalDirectories))
 })

@@ -33,8 +33,12 @@ export namespace SystemPrompt {
     return [PROMPT_DEFAULT]
   }
 
-  export async function environment(model: Provider.Model) {
+  export async function environment(model: Provider.Model, additionalDirectories?: string[]) {
     const project = Instance.project
+    const additionalDirsInfo =
+      additionalDirectories && additionalDirectories.length > 0
+        ? `  Additional working directories: ${additionalDirectories.join(", ")}\n`
+        : ""
     return [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -43,6 +47,7 @@ export namespace SystemPrompt {
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
         `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        additionalDirsInfo,
         `  Platform: ${process.platform}`,
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,

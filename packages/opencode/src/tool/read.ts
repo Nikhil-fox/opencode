@@ -96,6 +96,9 @@ export const ReadTool = Tool.defineEffect(
       }
       const title = path.relative(Instance.worktree, filepath)
 
+      const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+      yield* assertExternalDirectoryEffect(ctx, filepath, {}, additionalDirs)
+
       const stat = yield* fs.stat(filepath).pipe(
         Effect.catchIf(
           (err) => "reason" in err && err.reason._tag === "NotFound",

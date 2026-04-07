@@ -1,5 +1,6 @@
 import path from "path"
 import os from "os"
+import fs from "fs/promises"
 import z from "zod"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -479,12 +480,14 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         using _ = log.time("resolveTools")
         const tools: Record<string, AITool> = {}
 
+        const additionalDirectories = yield* sessions.getDirectories(input.session.id)
+
         const context = (args: any, options: ToolExecutionOptions): Tool.Context => ({
           sessionID: input.session.id,
           abort: options.abortSignal!,
           messageID: input.processor.message.id,
           callID: options.toolCallId,
-          extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+          extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, additionalDirectories },
           agent: input.agent.name,
           messages: input.messages,
           metadata: (val) =>
@@ -1580,9 +1583,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
                 yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
+                const additionalDirectories = yield* sessions.getDirectories(sessionID)
                 const [skills, env, instructions, modelMsgs] = yield* Effect.all([
                   Effect.promise(() => SystemPrompt.skills(agent)),
-                  Effect.promise(() => SystemPrompt.environment(model)),
+                  Effect.promise(() => SystemPrompt.environment(model, additionalDirectories)),
                   instruction.system().pipe(Effect.orDie),
                   Effect.promise(() => MessageV2.toModelMessages(msgs, model)),
                 ])
@@ -1673,6 +1677,67 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
           throw error
         }
+
+        // Handle add-dir command directly without agent invocation
+        if (input.command === Command.Default.ADD_DIR) {
+          const pathToAdd = input.arguments.trim()
+          if (!pathToAdd) {
+            const error = new NamedError.Unknown({ message: "Path is required. Usage: /add-dir <path>" })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          if (!path.isAbsolute(pathToAdd)) {
+            const error = new NamedError.Unknown({ message: `Path must be absolute: ${pathToAdd}` })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          const normalized = path.resolve(pathToAdd)
+          const stats = yield* Effect.promise(() => fs.stat(normalized).catch(() => null))
+          if (!stats?.isDirectory()) {
+            const error = new NamedError.Unknown({ message: `Path does not exist or is not a directory: ${pathToAdd}` })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          const existing = yield* sessions.getDirectories(input.sessionID)
+          if (existing.includes(normalized)) {
+            const error = new NamedError.Unknown({ message: `Directory already added: ${pathToAdd}` })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          yield* sessions.addDirectory({ sessionID: input.sessionID, path: normalized })
+          const ctx = yield* InstanceState.context
+          const msg: MessageV2.Assistant = {
+            id: input.messageID ?? MessageID.ascending(),
+            sessionID: input.sessionID,
+            parentID: MessageID.ascending(),
+            mode: "",
+            agent: "",
+            cost: 0,
+            path: { cwd: ctx.directory, root: ctx.worktree },
+            time: { created: Date.now() },
+            role: "assistant",
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            modelID: ModelID.make(""),
+            providerID: ProviderID.make(""),
+          }
+          yield* sessions.updateMessage(msg)
+          const part: MessageV2.TextPart = {
+            type: "text",
+            id: PartID.ascending(),
+            messageID: msg.id,
+            sessionID: input.sessionID,
+            text: `Added additional directory: ${normalized}\n\nFiles in this directory are now accessible to all tools for this session.`,
+          }
+          yield* sessions.updatePart(part)
+          yield* bus.publish(Command.Event.Executed, {
+            name: input.command,
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            messageID: msg.id,
+          })
+          return { info: msg, parts: [part] }
+        }
+
         const agentName = cmd.agent ?? input.agent ?? (yield* agents.defaultAgent())
 
         const raw = input.arguments.match(argsRegex) ?? []

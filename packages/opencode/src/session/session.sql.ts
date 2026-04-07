@@ -101,3 +101,20 @@ export const PermissionTable = sqliteTable("permission", {
   ...Timestamps,
   data: text({ mode: "json" }).notNull().$type<Permission.Ruleset>(),
 })
+
+export const SessionAdditionalDirectoryTable = sqliteTable(
+  "session_additional_directory",
+  {
+    id: text().primaryKey(),
+    session_id: text()
+      .$type<SessionID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    path: text().notNull(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("session_add_dir_session_idx").on(table.session_id),
+    index("session_add_dir_path_idx").on(table.path),
+  ],
+)

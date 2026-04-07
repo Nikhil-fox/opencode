@@ -222,7 +222,7 @@ function pathArgs(list: Part[], ps: boolean) {
   return out
 }
 
-async function collect(root: Node, cwd: string, ps: boolean, shell: string): Promise<Scan> {
+async function collect(root: Node, cwd: string, ps: boolean, shell: string, additionalDirectories?: string[]): Promise<Scan> {
   const scan: Scan = {
     dirs: new Set<string>(),
     patterns: new Set<string>(),
@@ -238,7 +238,7 @@ async function collect(root: Node, cwd: string, ps: boolean, shell: string): Pro
       for (const arg of pathArgs(command, ps)) {
         const resolved = await argPath(arg, cwd, ps, shell)
         log.info("resolved path", { arg, resolved })
-        if (!resolved || Instance.containsPath(resolved)) continue
+        if (!resolved || Instance.containsPath(resolved, additionalDirectories)) continue
         const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
         scan.dirs.add(dir)
       }
@@ -475,8 +475,9 @@ export const BashTool = Tool.define("bash", async () => {
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
       const ps = PS.has(name)
       const root = await parse(params.command, ps)
-      const scan = await collect(root, cwd, ps, shell)
-      if (!Instance.containsPath(cwd)) scan.dirs.add(cwd)
+      const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+      const scan = await collect(root, cwd, ps, shell, additionalDirs)
+      if (!Instance.containsPath(cwd, additionalDirs)) scan.dirs.add(cwd)
       await ask(ctx, scan)
 
       return run(

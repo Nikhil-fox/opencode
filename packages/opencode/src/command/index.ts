@@ -10,6 +10,7 @@ import { Skill } from "../skill"
 import { Log } from "../util/log"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
+import PROMPT_ADD_DIR from "./template/add-dir.txt"
 
 export namespace Command {
   const log = Log.create({ service: "command" })
@@ -63,6 +64,7 @@ export namespace Command {
   export const Default = {
     INIT: "init",
     REVIEW: "review",
+    ADD_DIR: "add-dir",
   } as const
 
   export interface Interface {
@@ -101,6 +103,13 @@ export namespace Command {
           },
           subtask: true,
           hints: hints(PROMPT_REVIEW),
+        }
+        commands[Default.ADD_DIR] = {
+          name: Default.ADD_DIR,
+          description: "add an additional working directory to the session",
+          source: "command",
+          template: PROMPT_ADD_DIR,
+          hints: ["$1"],
         }
 
         for (const [name, command] of Object.entries(cfg.command ?? {})) {

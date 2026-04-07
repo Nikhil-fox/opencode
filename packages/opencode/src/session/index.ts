@@ -12,7 +12,7 @@ import { Installation } from "../installation"
 import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import { SyncEvent } from "../sync"
 import type { SQL } from "../storage/db"
-import { SessionTable } from "./session.sql"
+import { SessionTable, SessionAdditionalDirectoryTable } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
@@ -366,6 +366,9 @@ export namespace Session {
       providerID: ProviderID
       messageID: MessageID
     }) => Effect.Effect<void>
+    readonly addDirectory: (input: { sessionID: SessionID; path: string }) => Effect.Effect<void>
+    readonly removeDirectory: (input: { sessionID: SessionID; path: string }) => Effect.Effect<void>
+    readonly getDirectories: (sessionID: SessionID) => Effect.Effect<string[]>
   }
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/Session") {}
@@ -661,6 +664,57 @@ export namespace Session {
         )
       })
 
+      const addDirectory = Effect.fn("Session.addDirectory")(function* (input: {
+        sessionID: SessionID
+        path: string
+      }) {
+        const normalized = path.resolve(input.path)
+        yield* db((d) =>
+          d
+            .insert(SessionAdditionalDirectoryTable)
+            .values({
+              id: crypto.randomUUID(),
+              session_id: input.sessionID,
+              path: normalized,
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .onConflictDoNothing()
+            .run(),
+        )
+        yield* patch(input.sessionID, { time: { updated: Date.now() } })
+      })
+
+      const removeDirectory = Effect.fn("Session.removeDirectory")(function* (input: {
+        sessionID: SessionID
+        path: string
+      }) {
+        const normalized = path.resolve(input.path)
+        yield* db((d) =>
+          d
+            .delete(SessionAdditionalDirectoryTable)
+            .where(
+              and(
+                eq(SessionAdditionalDirectoryTable.session_id, input.sessionID),
+                eq(SessionAdditionalDirectoryTable.path, normalized),
+              ),
+            )
+            .run(),
+        )
+        yield* patch(input.sessionID, { time: { updated: Date.now() } })
+      })
+
+      const getDirectories = Effect.fn("Session.getDirectories")(function* (sessionID: SessionID) {
+        const rows = yield* db((d) =>
+          d
+            .select({ path: SessionAdditionalDirectoryTable.path })
+            .from(SessionAdditionalDirectoryTable)
+            .where(eq(SessionAdditionalDirectoryTable.session_id, sessionID))
+            .all(),
+        )
+        return rows.map((r) => r.path)
+      })
+
       return Service.of({
         create,
         fork,
@@ -684,6 +738,9 @@ export namespace Session {
         updatePart,
         updatePartDelta,
         initialize,
+        addDirectory,
+        removeDirectory,
+        getDirectories,
       })
     }),
   )
@@ -891,4 +948,14 @@ export namespace Session {
     z.object({ sessionID: SessionID.zod, modelID: ModelID.zod, providerID: ProviderID.zod, messageID: MessageID.zod }),
     (input) => runPromise((svc) => svc.initialize(input)),
   )
+
+  export const addDirectory = fn(z.object({ sessionID: SessionID.zod, path: z.string() }), (input) =>
+    runPromise((svc) => svc.addDirectory(input)),
+  )
+
+  export const removeDirectory = fn(z.object({ sessionID: SessionID.zod, path: z.string() }), (input) =>
+    runPromise((svc) => svc.removeDirectory(input)),
+  )
+
+  export const getDirectories = fn(SessionID.zod, (sessionID) => runPromise((svc) => svc.getDirectories(sessionID)))
 }
