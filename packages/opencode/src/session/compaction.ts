@@ -34,7 +34,7 @@ export namespace SessionCompaction {
 
   export const PRUNE_MINIMUM = 20_000
   export const PRUNE_PROTECT = 40_000
-  const PRUNE_PROTECTED_TOOLS = ["skill"]
+  const PRUNE_PROTECTED_TOOLS = ["skill", "bash"]
 
   export interface Interface {
     readonly isOverflow: (input: {
