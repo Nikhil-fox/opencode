@@ -1,5 +1,6 @@
 import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
 import { pathToFileURL } from "bun"
+import path from "path"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
 import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
@@ -251,8 +252,11 @@ export function Autocomplete(props: {
         const width = props.anchor().width - 4
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
-            const baseDir = (sync.data.path.directory || process.cwd()).replace(/\/+$/, "")
-            const fullPath = `${baseDir}/${item}`
+            // If item is already an absolute path (from additional directories), use it as-is
+            // Otherwise, prepend the base directory
+            const fullPath = path.isAbsolute(item)
+              ? item
+              : path.join(sync.data.path.directory || process.cwd(), item)
             const urlObj = pathToFileURL(fullPath)
             let filename = item
             if (lineRange && !item.endsWith("/")) {
@@ -269,7 +273,7 @@ export function Autocomplete(props: {
               display: Locale.truncateMiddle(filename, width),
               value: filename,
               isDirectory: isDir,
-              path: item,
+              path: fullPath,
               onSelect: () => {
                 insertPart(filename, {
                   type: "file",
@@ -283,7 +287,7 @@ export function Autocomplete(props: {
                       end: 0,
                       value: "",
                     },
-                    path: item,
+                    path: fullPath,
                   },
                 })
               },
