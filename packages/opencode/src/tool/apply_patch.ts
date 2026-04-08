@@ -58,9 +58,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     let totalDiff = ""
 
+    const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+    
     for (const hunk of hunks) {
       const filePath = path.resolve(Instance.directory, hunk.path)
-      await assertExternalDirectory(ctx, filePath)
+      await assertExternalDirectory(ctx, filePath, {}, additionalDirs)
 
       switch (hunk.type) {
         case "add": {
@@ -118,7 +120,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
-          await assertExternalDirectory(ctx, movePath)
+          await assertExternalDirectory(ctx, movePath, {}, additionalDirs)
 
           fileChanges.push({
             filePath,

@@ -109,7 +109,7 @@ export const ReadTool = Tool.defineEffect(
       yield* assertExternalDirectoryEffect(ctx, filepath, {
         bypass: Boolean(ctx.extra?.["bypassCwdCheck"]),
         kind: stat?.type === "Directory" ? "directory" : "file",
-      })
+      }, additionalDirs)
 
       yield* Effect.promise(() =>
         ctx.ask({

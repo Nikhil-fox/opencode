@@ -21,8 +21,16 @@ export async function assertExternalDirectory(
 
   if (options?.bypass) return
 
-  const full = process.platform === "win32" ? AppFileSystem.normalizePath(target) : target
-  if (Instance.containsPath(full, additionalDirectories)) return
+  // Resolve to absolute path and normalize for comparison
+  const resolved = path.resolve(target)
+  const full = process.platform === "win32" ? AppFileSystem.normalizePath(resolved) : resolved
+  
+  // Normalize additional directories for comparison
+  const normalizedAdditionalDirs = additionalDirectories?.map(dir => 
+    process.platform === "win32" ? AppFileSystem.normalizePath(path.resolve(dir)) : path.resolve(dir)
+  )
+  
+  if (Instance.containsPath(full, normalizedAdditionalDirs)) return
 
   const kind = options?.kind ?? "file"
   const dir = kind === "directory" ? full : path.dirname(full)

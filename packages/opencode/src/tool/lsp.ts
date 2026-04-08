@@ -30,7 +30,8 @@ export const LspTool = Tool.define("lsp", {
   }),
   execute: async (args, ctx) => {
     const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
-    await assertExternalDirectory(ctx, file)
+    const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+    await assertExternalDirectory(ctx, file, {}, additionalDirs)
 
     await ctx.ask({
       permission: "lsp",

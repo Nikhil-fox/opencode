@@ -25,7 +25,8 @@ export const WriteTool = Tool.define("write", {
   }),
   async execute(params, ctx) {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
-    await assertExternalDirectory(ctx, filepath)
+    const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+    await assertExternalDirectory(ctx, filepath, {}, additionalDirs)
 
     const exists = await Filesystem.exists(filepath)
     const contentOld = exists ? await Filesystem.readText(filepath) : ""
