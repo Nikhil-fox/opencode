@@ -1,0 +1,15 @@
+Remove an additional working directory from the current session.
+
+Usage: /remove-dir <path>
+
+This will:
+1. Validate the directory is currently added to the session
+2. Remove it from the session's allowed directories
+3. Tools will no longer be able to access files in this directory
+4. The directory will be removed from the AI's context
+
+Arguments:
+  $1 - Absolute path of the directory to remove
+
+Example:
+  /remove-dir /home/user/projects/shared-lib

@@ -4049,6 +4049,79 @@ export type PermissionRespondResponses = {
 
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
 
+export type SessionDirectoriesData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/directories"
+}
+
+export type SessionDirectoriesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionDirectoriesError = SessionDirectoriesErrors[keyof SessionDirectoriesErrors]
+
+export type SessionDirectoriesResponses = {
+  /**
+   * List of directory paths
+   */
+  200: Array<string>
+}
+
+export type SessionDirectoriesResponse = SessionDirectoriesResponses[keyof SessionDirectoriesResponses]
+
+export type SessionRemoveDirectoryData = {
+  body?: {
+    /**
+     * Absolute path of the directory to remove
+     */
+    path: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/directory"
+}
+
+export type SessionRemoveDirectoryErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRemoveDirectoryError = SessionRemoveDirectoryErrors[keyof SessionRemoveDirectoryErrors]
+
+export type SessionRemoveDirectoryResponses = {
+  /**
+   * Successfully removed directory
+   */
+  200: boolean
+}
+
+export type SessionRemoveDirectoryResponse = SessionRemoveDirectoryResponses[keyof SessionRemoveDirectoryResponses]
+
 export type PermissionReplyData = {
   body?: {
     reply: "once" | "always" | "reject"

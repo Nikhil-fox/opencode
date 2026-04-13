@@ -393,7 +393,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             sessionID: userMessage.info.sessionID,
             type: "text",
             text:
-              BUILD_SWITCH + "\n\n" + `An architectural design file exists at ${architect}. You should execute on the design defined within it`,
+              BUILD_SWITCH +
+              "\n\n" +
+              `An architectural design file exists at ${architect}. You should execute on the design defined within it`,
             synthetic: true,
           })
           userMessage.parts.push(part)
@@ -1729,6 +1731,54 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             messageID: msg.id,
             sessionID: input.sessionID,
             text: `Added additional directory: ${normalized}\n\nFiles in this directory are now accessible to all tools for this session.`,
+          }
+          yield* sessions.updatePart(part)
+          yield* bus.publish(Command.Event.Executed, {
+            name: input.command,
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            messageID: msg.id,
+          })
+          return { info: msg, parts: [part] }
+        }
+
+        if (input.command === Command.Default.REMOVE_DIR) {
+          const pathToRemove = input.arguments.trim()
+          if (!pathToRemove) {
+            const error = new NamedError.Unknown({ message: "Path is required. Usage: /remove-dir <path>" })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          const normalized = path.resolve(pathToRemove)
+          const existing = yield* sessions.getDirectories(input.sessionID)
+          if (!existing.includes(normalized)) {
+            const error = new NamedError.Unknown({ message: `Directory not found in session: ${pathToRemove}` })
+            yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+            throw error
+          }
+          yield* sessions.removeDirectory({ sessionID: input.sessionID, path: normalized })
+          const ctx = yield* InstanceState.context
+          const msg: MessageV2.Assistant = {
+            id: input.messageID ?? MessageID.ascending(),
+            sessionID: input.sessionID,
+            parentID: MessageID.ascending(),
+            mode: "",
+            agent: "",
+            cost: 0,
+            path: { cwd: ctx.directory, root: ctx.worktree },
+            time: { created: Date.now() },
+            role: "assistant",
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            modelID: ModelID.make(""),
+            providerID: ProviderID.make(""),
+          }
+          yield* sessions.updateMessage(msg)
+          const part: MessageV2.TextPart = {
+            type: "text",
+            id: PartID.ascending(),
+            messageID: msg.id,
+            sessionID: input.sessionID,
+            text: `Removed additional directory: ${normalized}\n\nFiles in this directory are no longer accessible for this session.`,
           }
           yield* sessions.updatePart(part)
           yield* bus.publish(Command.Event.Executed, {

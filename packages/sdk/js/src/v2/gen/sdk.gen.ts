@@ -123,6 +123,8 @@ import type {
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffResponses,
+  SessionDirectoriesErrors,
+  SessionDirectoriesResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -137,6 +139,8 @@ import type {
   SessionPromptAsyncResponses,
   SessionPromptErrors,
   SessionPromptResponses,
+  SessionRemoveDirectoryErrors,
+  SessionRemoveDirectoryResponses,
   SessionRevertErrors,
   SessionRevertResponses,
   SessionShareErrors,
@@ -2449,6 +2453,81 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}/unrevert",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Get additional directories
+   *
+   * Get the list of additional working directories added to the session.
+   */
+  public directories<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionDirectoriesResponses, SessionDirectoriesErrors, ThrowOnError>({
+      url: "/session/{sessionID}/directories",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Remove additional directory
+   *
+   * Remove an additional working directory from the session.
+   */
+  public removeDirectory<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      SessionRemoveDirectoryResponses,
+      SessionRemoveDirectoryErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/directory",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }

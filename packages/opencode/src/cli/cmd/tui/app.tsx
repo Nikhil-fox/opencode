@@ -36,6 +36,7 @@ import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { DialogWorkspaceList } from "@tui/component/dialog-workspace-list"
+import { DialogDirectoryList } from "@tui/component/dialog-directory-list"
 import { DialogConsoleOrg } from "@tui/component/dialog-console-org"
 import { KeybindProvider, useKeybind } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
@@ -225,13 +226,13 @@ export function tui(input: {
                                   <DialogProvider>
                                     <CommandProvider>
                                       <FrecencyProvider>
-                                         <PromptHistoryProvider>
-                                           <PromptRefProvider>
-                                             <AutoAcceptProvider>
-                                               <App onSnapshot={input.onSnapshot} />
-                                             </AutoAcceptProvider>
-                                           </PromptRefProvider>
-                                         </PromptHistoryProvider>
+                                        <PromptHistoryProvider>
+                                          <PromptRefProvider>
+                                            <AutoAcceptProvider>
+                                              <App onSnapshot={input.onSnapshot} />
+                                            </AutoAcceptProvider>
+                                          </PromptRefProvider>
+                                        </PromptHistoryProvider>
                                       </FrecencyProvider>
                                     </CommandProvider>
                                   </DialogProvider>
@@ -482,6 +483,19 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           },
         ]
       : []),
+    {
+      title: "Manage directories",
+      value: "dir.list",
+      category: "Session",
+      suggested: route.data.type === "session",
+      slash: {
+        name: "list-dirs",
+        aliases: ["dirs"],
+      },
+      onSelect: () => {
+        dialog.replace(() => <DialogDirectoryList />)
+      },
+    },
     {
       title: "New session",
       suggested: route.data.type === "session",

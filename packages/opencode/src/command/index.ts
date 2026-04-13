@@ -11,6 +11,7 @@ import { Log } from "../util/log"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import PROMPT_ADD_DIR from "./template/add-dir.txt"
+import PROMPT_REMOVE_DIR from "./template/remove-dir.txt"
 
 export namespace Command {
   const log = Log.create({ service: "command" })
@@ -65,6 +66,7 @@ export namespace Command {
     INIT: "init",
     REVIEW: "review",
     ADD_DIR: "add-dir",
+    REMOVE_DIR: "remove-dir",
   } as const
 
   export interface Interface {
@@ -109,6 +111,13 @@ export namespace Command {
           description: "add an additional working directory to the session",
           source: "command",
           template: PROMPT_ADD_DIR,
+          hints: ["$1"],
+        }
+        commands[Default.REMOVE_DIR] = {
+          name: Default.REMOVE_DIR,
+          description: "remove an additional working directory from the session",
+          source: "command",
+          template: PROMPT_REMOVE_DIR,
           hints: ["$1"],
         }
 

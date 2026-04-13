@@ -1027,5 +1027,72 @@ export const SessionRoutes = lazy(() =>
         })
         return c.json(true)
       },
+    )
+    .get(
+      "/:sessionID/directories",
+      describeRoute({
+        summary: "Get additional directories",
+        description: "Get the list of additional working directories added to the session.",
+        operationId: "session.directories",
+        responses: {
+          200: {
+            description: "List of directory paths",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.string())),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const dirs = await Session.getDirectories(sessionID)
+        return c.json(dirs)
+      },
+    )
+    .delete(
+      "/:sessionID/directory",
+      describeRoute({
+        summary: "Remove additional directory",
+        description: "Remove an additional working directory from the session.",
+        operationId: "session.removeDirectory",
+        responses: {
+          200: {
+            description: "Successfully removed directory",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          path: z.string().meta({ description: "Absolute path of the directory to remove" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const { path } = c.req.valid("json")
+        await Session.removeDirectory({ sessionID, path })
+        return c.json(true)
+      },
     ),
 )
