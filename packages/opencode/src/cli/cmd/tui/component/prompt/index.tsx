@@ -163,8 +163,11 @@ export function Prompt(props: PromptProps) {
     const model = sync.data.provider.find((item) => item.id === last.providerID)?.models[last.modelID]
     const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
     const cost = msg.reduce((sum, item) => sum + (item.role === "assistant" ? item.cost : 0), 0)
+    const duration = last.time.completed && last.time.created ? (last.time.completed - last.time.created) / 1000 : undefined
+    const tps = duration && duration > 0 ? Math.round((last.tokens.output + last.tokens.reasoning) / duration) : undefined
     return {
       context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
+      tps: tps ? `${Locale.number(tps)} t/s` : undefined,
       cost: cost > 0 ? money.format(cost) : undefined,
     }
   })
@@ -1256,7 +1259,7 @@ export function Prompt(props: PromptProps) {
                     <Match when={usage()}>
                       {(item) => (
                         <text fg={theme.textMuted} wrapMode="none">
-                          {[item().context, item().cost].filter(Boolean).join(" · ")}
+                          {[item().context, item().tps, item().cost].filter(Boolean).join(" · ")}
                         </text>
                       )}
                     </Match>
