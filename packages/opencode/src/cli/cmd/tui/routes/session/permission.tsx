@@ -436,6 +436,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               body={current.body}
               options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
               escapeKey="reject"
+              tabKey="reject"
               fullscreen
               onSelect={(option) => {
                 if (option === "always") {
@@ -443,13 +444,22 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   return
                 }
                 if (option === "reject") {
-                  setStore("stage", "reject")
+                  sdk.client.permission.reply({
+                    reply: "reject",
+                    requestID: props.request.id,
+                  })
                   return
                 }
                 sdk.client.permission.reply({
                   reply: "once",
                   requestID: props.request.id,
                 })
+              }}
+              onTab={(option) => {
+                if (option === "reject") {
+                  setStore("stage", "reject")
+                  return
+                }
               }}
             />
           )
@@ -480,7 +490,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
     }
     if (evt.name === "return") {
       evt.preventDefault()
-      props.onConfirm(input.plainText)
+      props.onConfirm(input.plainText || "")
     }
   })
 
@@ -497,7 +507,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
           <text fg={theme.text}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.textMuted}>Tell OpenCode what to do differently</text>
+          <text fg={theme.textMuted}>Provide feedback for the model (leave empty to just reject)</text>
         </box>
       </box>
       <box
@@ -542,8 +552,10 @@ function Prompt<const T extends Record<string, string>>(props: {
   body: JSX.Element
   options: T
   escapeKey?: keyof T
+  tabKey?: keyof T
   fullscreen?: boolean
   onSelect: (option: keyof T) => void
+  onTab?: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
   const keybind = useKeybind()
@@ -577,6 +589,11 @@ function Prompt<const T extends Record<string, string>>(props: {
     if (evt.name === "return") {
       evt.preventDefault()
       props.onSelect(store.selected)
+    }
+
+    if (evt.name === "tab" && props.onTab) {
+      evt.preventDefault()
+      props.onTab(store.selected)
     }
 
     if (props.escapeKey && (evt.name === "escape" || keybind.match("app_exit", evt))) {
@@ -663,6 +680,11 @@ function Prompt<const T extends Record<string, string>>(props: {
           <Show when={props.fullscreen}>
             <text fg={theme.text}>
               {"ctrl+f"} <span style={{ fg: theme.textMuted }}>{hint()}</span>
+            </text>
+          </Show>
+          <Show when={props.tabKey && store.selected === props.tabKey}>
+            <text fg={theme.text}>
+              tab <span style={{ fg: theme.textMuted }}>provide feedback</span>
             </text>
           </Show>
           <text fg={theme.text}>
