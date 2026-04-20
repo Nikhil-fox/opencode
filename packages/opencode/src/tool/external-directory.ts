@@ -1,8 +1,10 @@
 import path from "path"
 import { Effect } from "effect"
-import type { Tool } from "./tool"
+import { EffectLogger } from "@/effect"
+import { InstanceState } from "@/effect"
+import type * as Tool from "./tool"
 import { Instance } from "../project/instance"
-import { AppFileSystem } from "../filesystem"
+import { AppFileSystem } from "@opencode-ai/shared/filesystem"
 
 type Kind = "file" | "directory"
 
@@ -11,7 +13,7 @@ type Options = {
   kind?: Kind
 }
 
-export async function assertExternalDirectory(
+export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirectory")(function* (
   ctx: Tool.Context,
   target?: string,
   options?: Options,
@@ -21,16 +23,21 @@ export async function assertExternalDirectory(
 
   if (options?.bypass) return
 
-  // Resolve to absolute path and normalize for comparison
+  const ins = yield* InstanceState.context
   const resolved = path.resolve(target)
   const full = process.platform === "win32" ? AppFileSystem.normalizePath(resolved) : resolved
-  
-  // Normalize additional directories for comparison
-  const normalizedAdditionalDirs = additionalDirectories?.map(dir => 
-    process.platform === "win32" ? AppFileSystem.normalizePath(path.resolve(dir)) : path.resolve(dir)
+
+  if (Instance.containsPath(full, ins)) return
+
+  const normalizedAdditionalDirs = additionalDirectories?.map((dir) =>
+    process.platform === "win32" ? AppFileSystem.normalizePath(path.resolve(dir)) : path.resolve(dir),
   )
-  
-  if (Instance.containsPath(full, normalizedAdditionalDirs)) return
+
+  if (normalizedAdditionalDirs) {
+    for (const dir of normalizedAdditionalDirs) {
+      if (AppFileSystem.contains(dir, full)) return
+    }
+  }
 
   const kind = options?.kind ?? "file"
   const dir = kind === "directory" ? full : path.dirname(full)
@@ -39,7 +46,7 @@ export async function assertExternalDirectory(
       ? AppFileSystem.normalizePathPattern(path.join(dir, "*"))
       : path.join(dir, "*").replaceAll("\\", "/")
 
-  await ctx.ask({
+  yield* ctx.ask({
     permission: "external_directory",
     patterns: [glob],
     always: [glob],
@@ -48,13 +55,15 @@ export async function assertExternalDirectory(
       parentDir: dir,
     },
   })
-}
+})
 
-export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirectory")(function* (
+export async function assertExternalDirectory(
   ctx: Tool.Context,
   target?: string,
   options?: Options,
   additionalDirectories?: string[],
 ) {
-  yield* Effect.promise(() => assertExternalDirectory(ctx, target, options, additionalDirectories))
-})
+  return Effect.runPromise(
+    assertExternalDirectoryEffect(ctx, target, options, additionalDirectories).pipe(Effect.provide(EffectLogger.layer)),
+  )
+}

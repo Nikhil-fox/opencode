@@ -13,7 +13,7 @@ import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
-import { Locale } from "@/util/locale"
+import { Locale } from "@/util"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -112,7 +112,7 @@ export function Autocomplete(props: {
 
   const position = createMemo(() => {
     if (!store.visible) return { x: 0, y: 0, width: 0 }
-    const dims = dimensions()
+    dimensions()
     positionTick()
     const anchor = props.anchor()
     const parent = anchor.parent
@@ -252,11 +252,8 @@ export function Autocomplete(props: {
         const width = props.anchor().width - 4
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
-            // If item is already an absolute path (from additional directories), use it as-is
-            // Otherwise, prepend the base directory
-            const fullPath = path.isAbsolute(item)
-              ? item
-              : path.join(sync.data.path.directory || process.cwd(), item)
+            const baseDir = (sync.path.directory || process.cwd()).replace(/\/+$/, "")
+            const fullPath = path.isAbsolute(item) ? item : `${baseDir}/${item}`
             const urlObj = pathToFileURL(fullPath)
             let filename = item
             if (lineRange && !item.endsWith("/")) {
