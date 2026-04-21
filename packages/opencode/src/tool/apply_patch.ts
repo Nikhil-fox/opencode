@@ -46,7 +46,6 @@ export const ApplyPatchTool = Tool.define(
         if (normalized === "*** Begin Patch\n*** End Patch") {
           return yield* Effect.fail(new Error("patch rejected: empty patch"))
         }
-        }
         return yield* Effect.fail(new Error("apply_patch verification failed: no hunks found"))
       }
 

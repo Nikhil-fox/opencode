@@ -387,7 +387,7 @@ export const BashTool = Tool.define(
           for (const arg of pathArgs(command, ps)) {
             const resolved = yield* argPath(arg, cwd, ps, shell)
             log.info("resolved path", { arg, resolved })
-            if (!resolved || Instance.containsPath(resolved, additionalDirectories)) continue
+            if (!resolved || Instance.containsPath(resolved, undefined, additionalDirectories)) continue
             const dir = (yield* fs.isDir(resolved)) ? resolved : path.dirname(resolved)
             scan.dirs.add(dir)
           }
@@ -606,7 +606,7 @@ export const BashTool = Tool.define(
               const root = yield* parse(params.command, ps)
               const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
               const scan = yield* collect(root, cwd, ps, shell, additionalDirs)
-              if (!Instance.containsPath(cwd, additionalDirs)) scan.dirs.add(cwd)
+              if (!Instance.containsPath(cwd, undefined, additionalDirs)) scan.dirs.add(cwd)
               yield* ask(ctx, scan)
 
               return yield* run(
