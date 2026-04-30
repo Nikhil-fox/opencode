@@ -154,19 +154,7 @@ export const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 question: "allow",
-                plan_exit: "allow",
-                architect_exit: "allow",
-                external_directory: {
-                  [path.join(Global.Path.data, "plans", "*")]: "allow",
-                },
-                edit: {
-                  "*": "deny",
-                  [path.join(".opencode", "plans", "*.md")]: "allow",
-                  [path.join(".opencode", "architect", "*.md")]: "allow",
-                  [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
-                  [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("architect", "*.md")))]:
-                    "allow",
-                },
+                plan_enter: "allow",
               }),
               user,
             ),

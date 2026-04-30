@@ -1,5 +1,4 @@
 import { PlanExitTool } from "./plan"
-import { ArchitectExitTool } from "./architect"
 import { Session } from "../session"
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
