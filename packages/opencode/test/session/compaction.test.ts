@@ -597,7 +597,9 @@ describe("session.compaction.create", () => {
           overflow: true,
         })
 
-        const v2 = yield* SessionV2.Service.use((svc) => svc.messages(info.id)).pipe(Effect.provide(SessionV2.defaultLayer))
+        const v2 = yield* SessionV2.Service.use((svc) => svc.messages({ sessionID: info.id })).pipe(
+          Effect.provide(SessionV2.defaultLayer),
+        )
         expect(v2.at(-1)).toMatchObject({
           type: "compaction",
           reason: "auto",

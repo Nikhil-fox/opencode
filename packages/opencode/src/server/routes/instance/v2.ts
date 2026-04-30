@@ -35,7 +35,7 @@ export const V2Routes = lazy(() =>
       return jsonRequest("V2Routes.messages", c, function* () {
         return yield* Effect.gen(function* () {
           const session = yield* SessionV2.Service
-          return yield* session.messages(sessionID)
+          return yield* session.messages({ sessionID })
         }).pipe(Effect.provide(SessionV2.defaultLayer))
       })
     },

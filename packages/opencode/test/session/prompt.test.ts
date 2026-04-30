@@ -396,7 +396,7 @@ it.live("prompt emits v2 prompted and synthetic events", () =>
         ],
       })
 
-      const messages = yield* SessionV2.Service.use((session) => session.messages(chat.id)).pipe(
+      const messages = yield* SessionV2.Service.use((session) => session.messages({ sessionID: chat.id })).pipe(
         Effect.provide(SessionV2.layer),
       )
       const row = Database.use((db) =>
