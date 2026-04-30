@@ -53,6 +53,7 @@ import { tuiHandlers } from "./handlers/tui"
 import { workspaceHandlers } from "./handlers/workspace"
 import { instanceContextLayer, instanceRouterMiddleware } from "./middleware/instance-context"
 import { workspaceRouterMiddleware, workspaceRoutingLayer } from "./middleware/workspace-routing"
+import { V2Api, v2Handlers } from "./v2"
 import { disposeMiddleware } from "./lifecycle"
 import { memoMap } from "@opencode-ai/core/effect/memo-map"
 import * as ServerBackend from "@/server/backend"
@@ -78,23 +79,26 @@ const cors = HttpRouter.middleware(
 )
 
 const rootApiRoutes = HttpApiBuilder.layer(RootHttpApi).pipe(Layer.provide([controlHandlers, globalHandlers]))
-const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
-  Layer.provide([
-    configHandlers,
-    experimentalHandlers,
-    fileHandlers,
-    instanceHandlers,
-    mcpHandlers,
-    projectHandlers,
-    ptyHandlers,
-    questionHandlers,
-    permissionHandlers,
-    providerHandlers,
-    sessionHandlers,
-    syncHandlers,
-    tuiHandlers,
-    workspaceHandlers,
-  ]),
+const instanceApiRoutes = Layer.mergeAll(
+  HttpApiBuilder.layer(InstanceHttpApi).pipe(
+    Layer.provide([
+      configHandlers,
+      experimentalHandlers,
+      fileHandlers,
+      instanceHandlers,
+      mcpHandlers,
+      projectHandlers,
+      ptyHandlers,
+      questionHandlers,
+      permissionHandlers,
+      providerHandlers,
+      sessionHandlers,
+      syncHandlers,
+      tuiHandlers,
+      workspaceHandlers,
+    ]),
+  ),
+  HttpApiBuilder.layer(V2Api).pipe(Layer.provide(v2Handlers)),
 )
 
 const rawInstanceRoutes = Layer.mergeAll(eventRoute, ptyConnectRoute).pipe(
