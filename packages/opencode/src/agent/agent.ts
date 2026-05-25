@@ -13,6 +13,7 @@ import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SCOUT from "./prompt/scout.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -164,6 +165,23 @@ export const layer = Layer.effect(
             ),
             mode: "primary",
             native: true,
+          },
+          architect: {
+            name: "architect",
+            description:
+              "Software architect mode for deep thinking, research, and design before implementation. Use this for complex features, architectural decisions, or when thorough analysis is needed.",
+            options: {},
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                question: "allow",
+                plan_enter: "allow",
+              }),
+              user,
+            ),
+            mode: "primary",
+            native: true,
+            prompt: PROMPT_ARCHITECT,
           },
           general: {
             name: "general",

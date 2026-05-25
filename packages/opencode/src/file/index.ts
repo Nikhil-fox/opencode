@@ -5,6 +5,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { AppFileSystem } from "@opencode-ai/core/filesystem"
 import { Git } from "@/git"
 import { Effect, Layer, Context, Schema, Scope } from "effect"
+import type { PlatformError } from "effect/PlatformError"
 import * as Stream from "effect/Stream"
 import { formatPatch, structuredPatch } from "diff"
 import fuzzysort from "fuzzysort"
@@ -322,7 +323,8 @@ export interface Interface {
     limit?: number
     dirs?: boolean
     type?: "file" | "directory"
-  }) => Effect.Effect<string[]>
+    additionalDirectories?: string[]
+  }) => Effect.Effect<string[], Error | PlatformError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/File") {}
@@ -345,7 +347,31 @@ export const layer = Layer.effect(
       ),
     )
 
-    const scan = Effect.fn("File.scan")(function* () {
+    const scanAdditionalDirectory = Effect.fn("File.scanAdditional")(function* (dir: string) {
+      const result: Entry = { files: [], dirs: [] }
+      const files = yield* rg.files({ cwd: dir }).pipe(
+        Stream.runCollect,
+        Effect.map((chunk) => [...chunk]),
+      )
+      const seen = new Set<string>()
+      for (const file of files) {
+        const absolute = path.isAbsolute(file) ? file : path.join(dir, file)
+        result.files.push(absolute)
+        let current = absolute
+        while (true) {
+          const parent = path.dirname(current)
+          if (parent === dir) break
+          if (parent === current) break
+          current = parent
+          if (seen.has(current)) continue
+          seen.add(current)
+          result.dirs.push(current + "/")
+        }
+      }
+      return result
+    })
+
+    const scan = Effect.fn("File.scan")(function* (additionalDirectories?: string[]) {
       const ctx = yield* InstanceState.context
       if (ctx.directory === path.parse(ctx.directory).root) return
       const isGlobalHome = ctx.directory === Global.Path.home && ctx.project.id === "global"
@@ -392,6 +418,14 @@ export const layer = Layer.effect(
             seen.add(dir)
             next.dirs.push(dir + "/")
           }
+        }
+      }
+
+      if (additionalDirectories) {
+        for (const dir of additionalDirectories) {
+          const additional = yield* scanAdditionalDirectory(dir)
+          next.files.push(...additional.files)
+          next.dirs.push(...additional.dirs)
         }
       }
 
@@ -614,6 +648,7 @@ export const layer = Layer.effect(
       limit?: number
       dirs?: boolean
       type?: "file" | "directory"
+      additionalDirectories?: string[]
     }) {
       yield* ensure()
       const { cache } = yield* InstanceState.get(state)
@@ -621,16 +656,29 @@ export const layer = Layer.effect(
       const query = input.query.trim()
       const limit = input.limit ?? 100
       const kind = input.type ?? (input.dirs === false ? "file" : "all")
-      log.info("search", { query, kind })
+      log.info("search", { query, kind, additionalDirs: input.additionalDirectories?.length ?? 0 })
 
       const preferHidden = query.startsWith(".") || query.includes("/.")
 
-      if (!query) {
-        if (kind === "file") return cache.files.slice(0, limit)
-        return sortHiddenLast(cache.dirs.toSorted(), preferHidden).slice(0, limit)
+      const additionalFiles: string[] = []
+      const additionalDirs: string[] = []
+      if (input.additionalDirectories && input.additionalDirectories.length > 0) {
+        for (const dir of input.additionalDirectories) {
+          const result = yield* scanAdditionalDirectory(dir)
+          additionalFiles.push(...result.files)
+          additionalDirs.push(...result.dirs)
+        }
       }
 
-      const items = kind === "file" ? cache.files : kind === "directory" ? cache.dirs : [...cache.files, ...cache.dirs]
+      const allFiles = [...cache.files, ...additionalFiles]
+      const allDirs = [...cache.dirs, ...additionalDirs]
+
+      if (!query) {
+        if (kind === "file") return allFiles.slice(0, limit)
+        return sortHiddenLast(allDirs.toSorted(), preferHidden).slice(0, limit)
+      }
+
+      const items = kind === "file" ? allFiles : kind === "directory" ? allDirs : [...allFiles, ...allDirs]
 
       const searchLimit = kind === "directory" && !preferHidden ? limit * 20 : limit
       const sorted = fuzzysort.go(query, items, { limit: searchLimit }).map((item) => item.target)

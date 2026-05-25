@@ -1,5 +1,7 @@
 import path from "path"
 import os from "os"
+import fs from "fs/promises"
+import z from "zod"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import * as Log from "@opencode-ai/core/util/log"
@@ -293,6 +295,316 @@ export const layer = Layer.effect(
       yield* sessions
         .setTitle({ sessionID: input.session.id, title: t })
         .pipe(Effect.catchCause((cause) => elog.error("failed to generate title", { error: Cause.squash(cause) })))
+    })
+
+    const insertReminders = Effect.fn("SessionPrompt.insertReminders")(function* (input: {
+      messages: MessageV2.WithParts[]
+      agent: Agent.Info
+      session: Session.Info
+    }) {
+      const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
+      if (!userMessage) return input.messages
+
+      const assistantMessage = input.messages.findLast((msg) => msg.info.role === "assistant")
+
+      if (!Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE) {
+        if (input.agent.name === "plan") {
+          userMessage.parts.push({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text: PROMPT_PLAN,
+            synthetic: true,
+          })
+        }
+        const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
+        if (wasPlan && input.agent.name === "build") {
+          userMessage.parts.push({
+            id: PartID.ascending(),
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            type: "text",
+            text: BUILD_SWITCH,
+            synthetic: true,
+          })
+        }
+        return input.messages
+      }
+
+      if (input.agent.name !== "plan" && assistantMessage?.info.agent === "plan") {
+        const plan = Session.plan(input.session)
+        if (!(yield* fsys.existsSafe(plan))) return input.messages
+        const part = yield* sessions.updatePart({
+          id: PartID.ascending(),
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          type: "text",
+          text: `${BUILD_SWITCH}\n\nA plan file exists at ${plan}. You should execute on the plan defined within it`,
+          synthetic: true,
+        })
+        userMessage.parts.push(part)
+        return input.messages
+      }
+
+      if (input.agent.name !== "plan" || assistantMessage?.info.agent === "plan") return input.messages
+
+      const plan = Session.plan(input.session)
+      const exists = yield* fsys.existsSafe(plan)
+      if (!exists) yield* fsys.ensureDir(path.dirname(plan)).pipe(Effect.catch(Effect.die))
+      const part = yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: userMessage.info.id,
+        sessionID: userMessage.info.sessionID,
+        type: "text",
+        text: `<system-reminder>
+Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+
+## Plan File Info:
+${exists ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.` : `No plan file exists yet. You should create your plan at ${plan} using the write tool.`}
+You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+
+## Plan Workflow
+
+### Phase 1: Initial Understanding
+Goal: Gain a comprehensive understanding of the user's request by reading through code and asking them questions. Critical: In this phase you should only use the explore subagent type.
+
+1. Focus on understanding the user's request and the code associated with their request
+
+2. **Launch up to 3 explore agents IN PARALLEL** (single message, multiple tool calls) to efficiently explore the codebase.
+ - Use 1 agent when the task is isolated to known files, the user provided specific file paths, or you're making a small targeted change.
+ - Use multiple agents when: the scope is uncertain, multiple areas of the codebase are involved, or you need to understand existing patterns before planning.
+ - Quality over quantity - 3 agents maximum, but you should try to use the minimum number of agents necessary (usually just 1)
+ - If using multiple agents: Provide each agent with a specific search focus or area to explore. Example: One agent searches for existing implementations, another explores related components, a third investigates testing patterns
+
+3. After exploring the code, use the question tool to clarify ambiguities in the user request up front.
+
+### Phase 2: Design
+Goal: Design an implementation approach.
+
+Launch general agent(s) to design the implementation based on the user's intent and your exploration results from Phase 1.
+
+You can launch up to 1 agent(s) in parallel.
+
+**Guidelines:**
+- **Default**: Launch at least 1 Plan agent for most tasks - it helps validate your understanding and consider alternatives
+- **Skip agents**: Only for truly trivial tasks (typo fixes, single-line changes, simple renames)
+
+Examples of when to use multiple agents:
+- The task touches multiple parts of the codebase
+- It's a large refactor or architectural change
+- There are many edge cases to consider
+- You'd benefit from exploring different approaches
+
+Example perspectives by task type:
+- New feature: simplicity vs performance vs maintainability
+- Bug fix: root cause vs workaround vs prevention
+- Refactoring: minimal change vs clean architecture
+
+In the agent prompt:
+- Provide comprehensive background context from Phase 1 exploration including filenames and code path traces
+- Describe requirements and constraints
+- Request a detailed implementation plan
+
+### Phase 3: Review
+Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's intentions.
+1. Read the critical files identified by agents to deepen your understanding
+2. Ensure that the plans align with the user's original request
+3. Use question tool to clarify any remaining questions with the user
+
+### Phase 4: Final Plan
+Goal: Write your final plan to the plan file (the only file you can edit).
+- Include only your recommended approach, not all alternatives
+- Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
+- Include the paths of critical files to be modified
+- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
+
+### Phase 5: Call plan_exit tool
+At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call plan_exit to indicate to the user that you are done planning.
+This is critical - your turn should only end with either asking the user a question or calling plan_exit. Do not stop unless it's for these 2 reasons.
+
+**Important:** Use question tool to clarify requirements/approach, use plan_exit to request plan approval. Do NOT use question tool to ask "Is this plan okay?" - that's what plan_exit does.
+
+NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
+</system-reminder>`,
+        synthetic: true,
+      })
+      userMessage.parts.push(part)
+
+      return input.messages
+    })
+
+    const resolveTools = Effect.fn("SessionPrompt.resolveTools")(function* (input: {
+      agent: Agent.Info
+      model: Provider.Model
+      session: Session.Info
+      tools?: Record<string, boolean>
+      processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
+      bypassAgentCheck: boolean
+      messages: MessageV2.WithParts[]
+    }) {
+      using _ = log.time("resolveTools")
+      const tools: Record<string, AITool> = {}
+      const run = yield* runner()
+      const promptOps = yield* ops()
+
+      const additionalDirectories = yield* sessions.getDirectories(input.session.id)
+
+      const context = (args: any, options: ToolExecutionOptions): Tool.Context => ({
+        sessionID: input.session.id,
+        abort: options.abortSignal!,
+        messageID: input.processor.message.id,
+        callID: options.toolCallId,
+        extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, additionalDirectories, promptOps },
+        agent: input.agent.name,
+        messages: input.messages,
+        metadata: (val) =>
+          input.processor.updateToolCall(options.toolCallId, (match) => {
+            if (!["running", "pending"].includes(match.state.status)) return match
+            return {
+              ...match,
+              state: {
+                title: val.title,
+                metadata: val.metadata,
+                status: "running",
+                input: args,
+                time: { start: Date.now() },
+              },
+            }
+          }),
+        ask: (req) =>
+          permission
+            .ask({
+              ...req,
+              sessionID: input.session.id,
+              tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+              ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+            })
+            .pipe(Effect.orDie),
+      })
+
+      for (const item of yield* registry.tools({
+        modelID: ModelID.make(input.model.api.id),
+        providerID: input.model.providerID,
+        agent: input.agent,
+      })) {
+        const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+        tools[item.id] = tool({
+          description: item.description,
+          inputSchema: jsonSchema(schema),
+          execute(args, options) {
+            return run.promise(
+              Effect.gen(function* () {
+                const ctx = context(args, options)
+                yield* plugin.trigger(
+                  "tool.execute.before",
+                  { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
+                  { args },
+                )
+                const result = yield* item.execute(args, ctx)
+                const output = {
+                  ...result,
+                  attachments: result.attachments?.map((attachment) => ({
+                    ...attachment,
+                    id: PartID.ascending(),
+                    sessionID: ctx.sessionID,
+                    messageID: input.processor.message.id,
+                  })),
+                }
+                yield* plugin.trigger(
+                  "tool.execute.after",
+                  { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
+                  output,
+                )
+                if (options.abortSignal?.aborted) {
+                  yield* input.processor.completeToolCall(options.toolCallId, output)
+                }
+                return output
+              }),
+            )
+          },
+        })
+      }
+
+      for (const [key, item] of Object.entries(yield* mcp.tools())) {
+        const execute = item.execute
+        if (!execute) continue
+
+        const schema = yield* Effect.promise(() => Promise.resolve(asSchema(item.inputSchema).jsonSchema))
+        const transformed = ProviderTransform.schema(input.model, schema)
+        item.inputSchema = jsonSchema(transformed)
+        item.execute = (args, opts) =>
+          run.promise(
+            Effect.gen(function* () {
+              const ctx = context(args, opts)
+              yield* plugin.trigger(
+                "tool.execute.before",
+                { tool: key, sessionID: ctx.sessionID, callID: opts.toolCallId },
+                { args },
+              )
+              yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: ["*"] })
+              const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.promise(() =>
+                execute(args, opts),
+              )
+              yield* plugin.trigger(
+                "tool.execute.after",
+                { tool: key, sessionID: ctx.sessionID, callID: opts.toolCallId, args },
+                result,
+              )
+
+              const textParts: string[] = []
+              const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
+              for (const contentItem of result.content) {
+                if (contentItem.type === "text") textParts.push(contentItem.text)
+                else if (contentItem.type === "image") {
+                  attachments.push({
+                    type: "file",
+                    mime: contentItem.mimeType,
+                    url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
+                  })
+                } else if (contentItem.type === "resource") {
+                  const { resource } = contentItem
+                  if (resource.text) textParts.push(resource.text)
+                  if (resource.blob) {
+                    attachments.push({
+                      type: "file",
+                      mime: resource.mimeType ?? "application/octet-stream",
+                      url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
+                      filename: resource.uri,
+                    })
+                  }
+                }
+              }
+
+              const truncated = yield* truncate.output(textParts.join("\n\n"), {}, input.agent)
+              const metadata = {
+                ...result.metadata,
+                truncated: truncated.truncated,
+                ...(truncated.truncated && { outputPath: truncated.outputPath }),
+              }
+
+              const output = {
+                title: "",
+                metadata,
+                output: truncated.content,
+                attachments: attachments.map((attachment) => ({
+                  ...attachment,
+                  id: PartID.ascending(),
+                  sessionID: ctx.sessionID,
+                  messageID: input.processor.message.id,
+                })),
+                content: result.content,
+              }
+              if (opts.abortSignal?.aborted) {
+                yield* input.processor.completeToolCall(opts.toolCallId, output)
+              }
+              return output
+            }),
+          )
+        tools[key] = item
+      }
+
+      return tools
     })
 
     const handleSubtask = Effect.fn("SessionPrompt.handleSubtask")(function* (input: {
@@ -1416,9 +1728,10 @@ export const layer = Layer.effect(
 
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
+            const additionalDirectories = yield* sessions.getDirectories(sessionID)
             const [skills, env, instructions, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
-              sys.environment(model),
+              sys.environment(model, additionalDirectories),
               instruction.system().pipe(Effect.orDie),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
@@ -1504,7 +1817,114 @@ export const layer = Layer.effect(
         yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
         throw error
       }
-      const agentName = cmd.agent ?? input.agent
+      if (input.command === Command.Default.ADD_DIR) {
+        const pathToAdd = input.arguments.trim()
+        if (!pathToAdd) {
+          const error = new NamedError.Unknown({ message: "Path is required. Usage: /add-dir <path>" })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        if (!path.isAbsolute(pathToAdd)) {
+          const error = new NamedError.Unknown({ message: `Path must be absolute: ${pathToAdd}` })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const normalized = path.resolve(pathToAdd)
+        const stats = yield* Effect.promise(() => fs.stat(normalized).catch(() => null))
+        if (!stats?.isDirectory()) {
+          const error = new NamedError.Unknown({ message: `Path does not exist or is not a directory: ${pathToAdd}` })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const existing = yield* sessions.getDirectories(input.sessionID)
+        if (existing.includes(normalized)) {
+          const error = new NamedError.Unknown({ message: `Directory already added: ${pathToAdd}` })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        yield* sessions.addDirectory({ sessionID: input.sessionID, path: normalized })
+        const ctx = yield* InstanceState.context
+        const msg: MessageV2.Assistant = {
+          id: input.messageID ?? MessageID.ascending(),
+          sessionID: input.sessionID,
+          parentID: MessageID.ascending(),
+          mode: "",
+          agent: "",
+          cost: 0,
+          path: { cwd: ctx.directory, root: ctx.worktree },
+          time: { created: Date.now() },
+          role: "assistant",
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelID.make(""),
+          providerID: ProviderID.make(""),
+        }
+        yield* sessions.updateMessage(msg)
+        const part: MessageV2.TextPart = {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: msg.id,
+          sessionID: input.sessionID,
+          text: `Added additional directory: ${normalized}\n\nFiles in this directory are now accessible to all tools for this session.`,
+        }
+        yield* sessions.updatePart(part)
+        yield* bus.publish(Command.Event.Executed, {
+          name: input.command,
+          sessionID: input.sessionID,
+          arguments: input.arguments,
+          messageID: msg.id,
+        })
+        return { info: msg, parts: [part] }
+      }
+
+      if (input.command === Command.Default.REMOVE_DIR) {
+        const pathToRemove = input.arguments.trim()
+        if (!pathToRemove) {
+          const error = new NamedError.Unknown({ message: "Path is required. Usage: /remove-dir <path>" })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const normalized = path.resolve(pathToRemove)
+        const existing = yield* sessions.getDirectories(input.sessionID)
+        if (!existing.includes(normalized)) {
+          const error = new NamedError.Unknown({ message: `Directory not found in session: ${pathToRemove}` })
+          yield* bus.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        yield* sessions.removeDirectory({ sessionID: input.sessionID, path: normalized })
+        const ctx = yield* InstanceState.context
+        const msg: MessageV2.Assistant = {
+          id: input.messageID ?? MessageID.ascending(),
+          sessionID: input.sessionID,
+          parentID: MessageID.ascending(),
+          mode: "",
+          agent: "",
+          cost: 0,
+          path: { cwd: ctx.directory, root: ctx.worktree },
+          time: { created: Date.now() },
+          role: "assistant",
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelID.make(""),
+          providerID: ProviderID.make(""),
+        }
+        yield* sessions.updateMessage(msg)
+        const part: MessageV2.TextPart = {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: msg.id,
+          sessionID: input.sessionID,
+          text: `Removed additional directory: ${normalized}\n\nFiles in this directory are no longer accessible for this session.`,
+        }
+        yield* sessions.updatePart(part)
+        yield* bus.publish(Command.Event.Executed, {
+          name: input.command,
+          sessionID: input.sessionID,
+          arguments: input.arguments,
+          messageID: msg.id,
+        })
+        return { info: msg, parts: [part] }
+      }
+
+      const agentName = cmd.agent ?? input.agent ?? (yield* agents.defaultAgent())
 
       const raw = input.arguments.match(argsRegex) ?? []
       const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))

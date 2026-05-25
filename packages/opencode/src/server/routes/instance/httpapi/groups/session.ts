@@ -98,6 +98,8 @@ export const SessionPaths = {
   deleteMessage: `${root}/:sessionID/message/:messageID`,
   deletePart: `${root}/:sessionID/message/:messageID/part/:partID`,
   updatePart: `${root}/:sessionID/message/:messageID/part/:partID`,
+  directories: `${root}/:sessionID/directories`,
+  removeDirectory: `${root}/:sessionID/directory`,
 } as const
 
 export const SessionApi = HttpApi.make("session")
@@ -436,6 +438,31 @@ export const SessionApi = HttpApi.make("session")
           OpenApi.annotations({
             identifier: "part.update",
             description: "Update a part in a message.",
+          }),
+        ),
+        HttpApiEndpoint.get("directories", SessionPaths.directories, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(Schema.String), "List of directory paths"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.directories",
+            summary: "Get additional directories",
+            description: "Get the list of additional working directories added to the session.",
+          }),
+        ),
+        HttpApiEndpoint.delete("removeDirectory", SessionPaths.removeDirectory, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: Schema.Struct({ path: Schema.String }),
+          success: described(Schema.Boolean, "Successfully removed directory"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.removeDirectory",
+            summary: "Remove additional directory",
+            description: "Remove an additional working directory from the session.",
           }),
         ),
       )

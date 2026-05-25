@@ -68,6 +68,15 @@ export const GrepTool = Tool.define(
           const info = yield* fs.stat(search).pipe(Effect.catch(() => Effect.succeed(undefined)))
           const cwd = info?.type === "Directory" ? search : path.dirname(search)
           const file = info?.type === "Directory" ? undefined : [path.relative(cwd, search)]
+          const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+          yield* assertExternalDirectoryEffect(
+            ctx,
+            search,
+            {
+              kind: info?.type === "Directory" ? "directory" : "file",
+            },
+            additionalDirs,
+          )
 
           const result = yield* rg.search({
             cwd,

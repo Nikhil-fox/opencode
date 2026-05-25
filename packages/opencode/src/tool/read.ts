@@ -212,6 +212,9 @@ export const ReadTool = Tool.define(
       yield* reference.ensure(filepath)
       const title = path.relative(instance.worktree, filepath)
 
+      const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+      yield* assertExternalDirectoryEffect(ctx, filepath, {}, additionalDirs)
+
       const stat = yield* fs.stat(filepath).pipe(
         Effect.catchIf(
           (err) => "reason" in err && err.reason._tag === "NotFound",
@@ -222,7 +225,7 @@ export const ReadTool = Tool.define(
       yield* assertExternalDirectoryEffect(ctx, filepath, {
         bypass: Boolean(ctx.extra?.["bypassCwdCheck"]) || (yield* reference.contains(filepath)),
         kind: stat?.type === "Directory" ? "directory" : "file",
-      })
+      }, additionalDirs)
 
       yield* ctx.ask({
         permission: "read",

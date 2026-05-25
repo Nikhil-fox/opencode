@@ -1,3 +1,33 @@
+# Build Commands
+
+## Quick Build (for testing)
+
+Build a single platform binary for local testing:
+
+```bash
+cd /home/nikhil/Documents/agents/opencode/packages/opencode
+OPENCODE_VERSION=1.3.17 bun run script/build.ts --single --skip-install --skip-embed-web-ui
+```
+
+**Flags:**
+- `--single` - Build only for current platform (faster)
+- `--skip-install` - Skip installing cross-platform dependencies
+- `--skip-embed-web-ui` - Skip embedding web UI bundle (faster)
+- `OPENCODE_VERSION=1.3.17` - Set version number
+
+**Output:** `dist/opencode-linux-x64/bin/opencode`
+
+## Full Build (for release)
+
+Build for all platforms:
+
+```bash
+cd /home/nikhil/Documents/agents/opencode/packages/opencode
+OPENCODE_VERSION=1.3.17 bun run script/build.ts
+```
+
+---
+
 # opencode database guide
 
 ## Database

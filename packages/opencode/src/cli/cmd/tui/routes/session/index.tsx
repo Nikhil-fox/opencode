@@ -86,6 +86,7 @@ import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
 import { DialogRetryAction } from "../../component/dialog-retry-action"
+import { useAutoAccept } from "../../context/auto-accept"
 import { SessionRetry } from "@/session/retry"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
@@ -202,6 +203,23 @@ export function Session() {
   })
   const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
+
+  const autoAccept = useAutoAccept()
+
+  // Auto-accept permissions when toggle is enabled
+  createEffect(() => {
+    const perms = permissions()
+    if (autoAccept.autoaccept() === "none" || perms.length === 0) return
+
+    for (const perm of perms) {
+      if (perm.permission === "edit") {
+        sdk.client.permission.reply({
+          reply: "once",
+          requestID: perm.id,
+        })
+      }
+    }
+  })
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -1505,7 +1523,10 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 
   const content = createMemo(() => {
     // OpenRouter encrypts some reasoning blocks; drop the placeholder.
-    return props.part.text.replace("[REDACTED]", "").trim()
+    return props.part.text
+      .replace("[REDACTED]", "")
+      .replace(/\[Thinking from previous turn\]/g, "")
+      .trim()
   })
   // Reasoning is finalized when the server sets `time.end` (see processor.ts).
   // Flips independently of the parent message completing.

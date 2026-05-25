@@ -1,7 +1,7 @@
 import type { BoxRenderable, TextareaRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { pathToFileURL } from "bun"
-import fuzzysort from "fuzzysort"
 import path from "path"
+import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
 import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -379,8 +379,8 @@ export function Autocomplete(props: {
   }
 
   const [files] = createResource(
-    () => search(),
-    async (query) => {
+    () => ({ search: search(), sessionID: props.sessionID }),
+    async ({ search: query, sessionID }) => {
       if (!store.visible || store.visible === "/") return []
       if (referenceSearch()) return []
 
@@ -390,6 +390,7 @@ export function Autocomplete(props: {
       const result = await sdk.client.find.files({
         query: baseQuery,
         workspace: project.workspace.current(),
+        sessionID,
       })
 
       const options: AutocompleteOption[] = []
@@ -410,13 +411,15 @@ export function Autocomplete(props: {
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
             const { filename, url, part } = createFilePart(item, lineRange)
+            const baseDir = (sync.path.directory || process.cwd()).replace(/\/+$/, "")
+            const fullPath = path.isAbsolute(item) ? item : `${baseDir}/${item}`
 
             const isDir = item.endsWith("/")
             return {
               display: Locale.truncateMiddle(filename, width),
               value: filename,
               isDirectory: isDir,
-              path: item,
+              path: fullPath,
               onSelect: () => {
                 insertPart(filename, part)
               },

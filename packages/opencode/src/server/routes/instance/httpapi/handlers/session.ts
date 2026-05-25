@@ -403,6 +403,20 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       return yield* session.updatePart(payload)
     })
 
+    const directories = Effect.fn("SessionHttpApi.directories")(function* (ctx: { params: { sessionID: SessionID } }) {
+      yield* requireSession(ctx.params.sessionID)
+      return yield* session.getDirectories(ctx.params.sessionID)
+    })
+
+    const removeDirectory = Effect.fn("SessionHttpApi.removeDirectory")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: { path: string }
+    }) {
+      yield* requireSession(ctx.params.sessionID)
+      yield* session.removeDirectory({ sessionID: ctx.params.sessionID, path: ctx.payload.path })
+      return true
+    })
+
     return handlers
       .handle("list", list)
       .handle("status", status)
@@ -431,5 +445,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("deleteMessage", deleteMessage)
       .handle("deletePart", deletePart)
       .handle("updatePart", updatePart)
+      .handle("directories", directories)
+      .handle("removeDirectory", removeDirectory)
   }),
 )

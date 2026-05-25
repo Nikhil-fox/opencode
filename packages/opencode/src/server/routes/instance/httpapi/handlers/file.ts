@@ -1,6 +1,8 @@
 import * as InstanceState from "@/effect/instance-state"
 import { File } from "@/file"
 import { Ripgrep } from "@/file/ripgrep"
+import { Session } from "@/session/session"
+import { SessionID } from "@/session/schema"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
@@ -9,6 +11,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
   Effect.gen(function* () {
     const svc = yield* File.Service
     const ripgrep = yield* Ripgrep.Service
+    const sessionSvc = yield* Session.Service
 
     const findText = Effect.fn("FileHttpApi.findText")(function* (ctx: { query: { pattern: string } }) {
       return (yield* ripgrep
@@ -17,13 +20,20 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
     })
 
     const findFile = Effect.fn("FileHttpApi.findFile")(function* (ctx: {
-      query: { query: string; dirs?: "true" | "false"; type?: "file" | "directory"; limit?: number }
+      query: { query: string; dirs?: "true" | "false"; type?: "file" | "directory"; limit?: number; sessionID?: string }
     }) {
+      let additionalDirectories: string[] | undefined
+      if (ctx.query.sessionID) {
+        additionalDirectories = yield* sessionSvc.getDirectories(SessionID.make(ctx.query.sessionID)).pipe(
+          Effect.catch(() => Effect.succeed([] as string[])),
+        )
+      }
       return yield* svc.search({
         query: ctx.query.query,
         limit: ctx.query.limit ?? 10,
         dirs: ctx.query.dirs !== "false",
         type: ctx.query.type,
+        additionalDirectories,
       })
     })
 

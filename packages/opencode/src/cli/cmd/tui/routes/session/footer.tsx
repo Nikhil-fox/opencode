@@ -5,6 +5,7 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/use-connected"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { useAutoAccept } from "../../context/auto-accept"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -19,6 +20,7 @@ export function Footer() {
   })
   const directory = useDirectory()
   const connected = useConnected()
+  const autoAccept = useAutoAccept()
 
   const [store, setStore] = createStore({
     welcome: false,
@@ -81,6 +83,9 @@ export function Footer() {
                 </Switch>
                 {mcp()} MCP
               </text>
+            </Show>
+            <Show when={autoAccept.autoaccept() === "edit"}>
+              <text fg={theme.success}>auto-accept</text>
             </Show>
             <text fg={theme.textMuted}>/status</text>
           </Match>

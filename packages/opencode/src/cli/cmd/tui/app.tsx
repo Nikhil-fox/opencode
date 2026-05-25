@@ -41,6 +41,8 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
+import { DialogWorkspaceList } from "@tui/component/dialog-workspace-list"
+import { DialogDirectoryList } from "@tui/component/dialog-directory-list"
 import { DialogConsoleOrg } from "@tui/component/dialog-console-org"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
@@ -59,6 +61,7 @@ import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { AutoAcceptProvider, useAutoAccept } from "./context/auto-accept"
 import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { TuiConfig } from "@/cli/cmd/tui/config/tui"
 import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
@@ -121,6 +124,7 @@ const appBindingCommands = [
   "app.toggle.diffwrap",
   "app.toggle.paste_summary",
   "app.toggle.session_directory_filter",
+  "permission.auto_accept.toggle",
 ] as const
 
 function rendererConfig(_config: TuiConfig.Resolved): CliRendererConfig {
@@ -238,7 +242,9 @@ export function tui(input: {
                                           <PromptHistoryProvider>
                                             <PromptRefProvider>
                                               <EditorContextProvider>
-                                                <App onSnapshot={input.onSnapshot} />
+                                                <AutoAcceptProvider>
+                                                  <App onSnapshot={input.onSnapshot} />
+                                                </AutoAcceptProvider>
                                               </EditorContextProvider>
                                             </PromptRefProvider>
                                           </PromptHistoryProvider>
@@ -318,6 +324,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     .finally(() => {
       setReady(true)
     })
+
+  const autoAccept = useAutoAccept()
 
   // Let selection copy/dismiss win ahead of normal bindings when the feature flag is on.
   const offSelectionKeys = keymap.intercept(
@@ -475,6 +483,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         slashAliases: ["resume", "continue"],
         run: () => {
           dialog.replace(() => <DialogSessionList />)
+        },
+      },
+      {
+        name: "dir.list",
+        title: "Manage directories",
+        category: "Session",
+        suggested: route.data.type === "session",
+        slashName: "list-dirs",
+        slashAliases: ["dirs"],
+        run: () => {
+          dialog.replace(() => <DialogDirectoryList />)
         },
       },
       {
@@ -816,6 +835,22 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           dialog.clear()
         },
       },
+      {
+        name: "permission.auto_accept.toggle",
+        title: autoAccept.autoaccept() === "none" ? "Enable auto-accept edits" : "Disable auto-accept edits",
+        category: "Agent",
+        slashName: "auto-accept",
+        slashAliases: ["aa"],
+        run: () => {
+          const next = autoAccept.autoaccept() === "none" ? "edit" : "none"
+          autoAccept.setAutoaccept(next)
+          toast.show({
+            message: next === "edit" ? "Auto-accept enabled for edits" : "Auto-accept disabled",
+            variant: "info",
+          })
+          dialog.clear()
+        },
+      },
     ].map((command) => ({
       namespace: "palette",
       ...command,
@@ -829,16 +864,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
     bindings: tuiConfig.keybinds.gather("app", appBindingCommands),
-  }))
-
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
-    enabled: () => {
-      const current = promptRef.current
-      if (!current?.focused) return true
-      return current.current.input === ""
-    },
-    bindings: tuiConfig.keybinds.gather("app_exit", ["app.exit"]),
   }))
 
   event.on(TuiEvent.CommandExecute.type, (evt) => {

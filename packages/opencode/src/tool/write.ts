@@ -41,7 +41,8 @@ export const WriteTool = Tool.define(
           const filepath = path.isAbsolute(params.filePath)
             ? params.filePath
             : path.join(instance.directory, params.filePath)
-          yield* assertExternalDirectoryEffect(ctx, filepath)
+          const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
+          yield* assertExternalDirectoryEffect(ctx, filepath, {}, additionalDirs)
 
           const exists = yield* fs.existsSafe(filepath)
           const source = exists ? yield* Bom.readFile(fs, filepath) : { bom: false, text: "" }

@@ -46,10 +46,11 @@ export const GlobTool = Tool.define(
           if (info?.type === "File") {
             throw new Error(`glob path must be a directory: ${search}`)
           }
+          const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
           yield* assertExternalDirectoryEffect(ctx, search, {
             bypass: yield* reference.contains(search),
             kind: "directory",
-          })
+          }, additionalDirs)
 
           const limit = 100
           let truncated = false
