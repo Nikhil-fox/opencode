@@ -866,6 +866,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     bindings: tuiConfig.keybinds.gather("app", appBindingCommands),
   }))
 
+  useBindings(() => ({
+    mode: OPENCODE_BASE_MODE,
+    enabled: () => {
+      const current = promptRef.current
+      if (!current?.focused) return true
+      return current.current.input === ""
+    },
+    bindings: tuiConfig.keybinds.gather("app_exit", ["app.exit"]),
+  }))
+
   event.on(TuiEvent.CommandExecute.type, (evt) => {
     keymap.dispatchCommand(evt.properties.command)
   })
