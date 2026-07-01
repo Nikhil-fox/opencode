@@ -49,17 +49,8 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { createFadeIn } from "../../util/signal"
 import { DialogSkill } from "../dialog-skill"
-import {
-  confirmWorkspaceFileChanges,
-  openWorkspaceSelect,
-  warpWorkspaceSession,
-  type WorkspaceSelection,
-} from "../dialog-workspace-create"
-import { useAutoAccept } from "../../context/auto-accept"
 import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
-import { CONSOLE_MANAGED_ICON, consoleManagedProviderLabel } from "../../util/provider-origin"
 import { useArgs } from "../../context/args"
-import type { WorkspaceStatus } from "../workspace-label"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
 import { useTuiConfig } from "../../config"
 import { usePromptWorkspace } from "./workspace"
@@ -215,16 +206,8 @@ export function Prompt(props: PromptProps) {
   const workspace = usePromptWorkspace(props.sessionID)
   const move = usePromptMove({ projectID: project.project, sessionID: () => props.sessionID })
   const [cursorVersion, setCursorVersion] = createSignal(0)
-  const activeOrgName = createMemo(() => sync.data.console_state.activeOrgName)
-  const canSwitchOrgs = createMemo(() => sync.data.console_state.switchableOrgCount > 1)
-  const currentProviderLabel = createMemo(() => {
-    const current = local.model.current()
-    const provider = local.model.parsed().provider
-    if (!current) return provider
-    return consoleManagedProviderLabel(sync.data.console_state.consoleManagedProviders, current.providerID, provider)
-  })
-  const hasRightContent = createMemo(() => Boolean(props.right || activeOrgName()))
-  const autoAccept = useAutoAccept()
+  const currentProviderLabel = createMemo(() => local.model.parsed().provider)
+  const hasRightContent = createMemo(() => Boolean(props.right))
 
   function promptModelWarning() {
     toast.show({
@@ -287,16 +270,8 @@ export function Prompt(props: PromptProps) {
     const model = sync.data.provider.find((item) => item.id === last.providerID)?.models[last.modelID]
     const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
     const cost = session?.cost ?? 0
-    const duration =
-      last.time.completed && last.time.created ? (last.time.completed - last.time.created) / 1000 : undefined
-    const tps =
-      duration && duration > 0 ? Math.round((last.tokens.output + last.tokens.reasoning) / duration) : undefined
     return {
       context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
-      tps: tps ? `${Locale.number(tps)} t/s` : undefined,
-      cache: last.tokens.cache.read > 0 || last.tokens.cache.write > 0
-        ? `↓${Locale.number(last.tokens.cache.read)} ↑${Locale.number(last.tokens.cache.write)}`
-        : undefined,
       cost: cost > 0 ? money.format(cost) : undefined,
     }
   })
@@ -565,7 +540,7 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Move session",
-        desc: "Move the session to another project directory",
+        desc: "Move to another project dir",
         name: "session.move",
         category: "Session",
         slashName: "move",
@@ -592,6 +567,7 @@ export function Prompt(props: PromptProps) {
       "prompt.stash",
       "prompt.stash.pop",
       "prompt.stash.list",
+      "prompt.skills",
       "session.interrupt",
       "workspace.set",
       "session.move",
@@ -1111,22 +1087,31 @@ export function Prompt(props: PromptProps) {
     } else {
       move.startSubmit()
       sdk.client.session
-        .prompt({
-          sessionID,
-          ...selectedModel,
-          agent: agent.name,
-          model: selectedModel,
-          variant,
-          parts: [
-            ...editorParts,
-            {
-              type: "text",
-              text: inputText,
-            },
-            ...nonTextParts,
-          ],
+        .prompt(
+          {
+            sessionID,
+            ...selectedModel,
+            agent: agent.name,
+            model: selectedModel,
+            variant,
+            parts: [
+              ...editorParts,
+              {
+                type: "text",
+                text: inputText,
+              },
+              ...nonTextParts,
+            ],
+          },
+          { throwOnError: true },
+        )
+        .catch((error) => {
+          toast.show({
+            title: "Failed to send prompt",
+            message: errorMessage(error),
+            variant: "error",
+          })
         })
-        .catch(() => {})
       if (editorParts.length > 0) editor.markSelectionSent()
     }
     history.append({
@@ -1457,6 +1442,9 @@ export function Prompt(props: PromptProps) {
                       <text fg={fadeColor(highlight(), agentMetaAlpha())}>
                         {store.mode === "shell" ? "Shell" : Locale.titlecase(agent().name)}
                       </text>
+                      <Show when={store.mode === "normal" && local.permission.mode === "auto"}>
+                        <text fg={fadeColor(theme.textMuted, agentMetaAlpha())}>auto</text>
+                      </Show>
                       <Show when={store.mode === "normal"}>
                         <box flexDirection="row" gap={1}>
                           <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>·</text>
@@ -1484,20 +1472,6 @@ export function Prompt(props: PromptProps) {
               <Show when={hasRightContent()}>
                 <box flexDirection="row" gap={1} alignItems="center">
                   {props.right}
-                  <Show when={activeOrgName()}>
-                    <text
-                      fg={theme.textMuted}
-                      onMouseUp={() => {
-                        if (!canSwitchOrgs()) return
-                        command.trigger("console.org.switch")
-                      }}
-                    >
-                      {`${CONSOLE_MANAGED_ICON} ${activeOrgName()}`}
-                    </text>
-                  </Show>
-                  <Show when={autoAccept.autoaccept() === "edit"}>
-                    <text fg={theme.success}>auto-accept</text>
-                  </Show>
                 </box>
               </Show>
             </box>
@@ -1676,7 +1650,7 @@ export function Prompt(props: PromptProps) {
                     <Match when={usage()}>
                       {(item) => (
                         <text fg={theme.textMuted} wrapMode="none">
-                          {[item().context, item().tps, item().cache, item().cost].filter(Boolean).join(" · ")}
+                          {[item().context, item().cost].filter(Boolean).join(" · ")}
                         </text>
                       )}
                     </Match>

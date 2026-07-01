@@ -269,12 +269,10 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
             }
 
             if (permission === "bash") {
-              const title =
-                typeof data.description === "string" && data.description ? data.description : "Shell command"
               const command = typeof data.command === "string" ? data.command : ""
               return {
                 icon: "#",
-                title,
+                title: "Shell command",
                 body: (
                   <Show when={command}>
                     <box paddingLeft={1}>
@@ -406,7 +404,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               body={current.body}
               options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
               escapeKey="reject"
-              tabKey="reject"
               fullscreen
               onSelect={(option) => {
                 if (option === "always") {
@@ -433,12 +430,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
                   workspace: project.workspace.current(),
                 })
               }}
-              onTab={(option) => {
-                if (option === "reject") {
-                  setStore("stage", "reject")
-                  return
-                }
-              }}
             />
           )
 
@@ -455,7 +446,6 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const tuiConfig = useTuiConfig()
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
-
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
     commands: [
@@ -469,18 +459,13 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
       },
     ],
     bindings: [
+      { key: "escape", desc: "Cancel permission rejection", group: "Permission", cmd: () => props.onCancel() },
       ...tuiConfig.keybinds.get("app.exit"),
-      {
-        key: "escape",
-        desc: "Cancel permission rejection",
-        group: "Permission",
-        cmd: () => props.onCancel(),
-      },
       {
         key: "return",
         desc: "Confirm permission rejection",
         group: "Permission",
-        cmd: () => props.onConfirm(input.plainText || ""),
+        cmd: () => props.onConfirm(input.plainText),
       },
     ],
   }))
@@ -498,7 +483,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
           <text fg={theme.text}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.textMuted}>Provide feedback for the model (leave empty to just reject)</text>
+          <text fg={theme.textMuted}>Tell OpenCode what to do differently</text>
         </box>
       </box>
       <box
@@ -542,10 +527,8 @@ function Prompt<const T extends Record<string, string>>(props: {
   body: JSX.Element
   options: T
   escapeKey?: keyof T
-  tabKey?: keyof T
   fullscreen?: boolean
   onSelect: (option: keyof T) => void
-  onTab?: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
@@ -626,14 +609,6 @@ function Prompt<const T extends Record<string, string>>(props: {
         desc: "Select permission option",
         group: "Permission",
         cmd: () => props.onSelect(store.selected),
-      },
-      {
-        key: "tab",
-        desc: "Provide feedback on rejection",
-        group: "Permission",
-        cmd: () => {
-          if (props.onTab) props.onTab(store.selected)
-        },
       },
       ...(props.escapeKey
         ? [
@@ -722,11 +697,6 @@ function Prompt<const T extends Record<string, string>>(props: {
           <Show when={props.fullscreen}>
             <text fg={theme.text}>
               {fullscreenHint()} <span style={{ fg: theme.textMuted }}>{hint()}</span>
-            </text>
-          </Show>
-          <Show when={props.tabKey && store.selected === props.tabKey}>
-            <text fg={theme.text}>
-              tab <span style={{ fg: theme.textMuted }}>provide feedback</span>
             </text>
           </Show>
           <text fg={theme.text}>

@@ -12,7 +12,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { fileURLToPath } from "url"
 import { Config } from "@/config/config"
 import { RuntimeFlags } from "@/effect/runtime-flags"
-import { Shell } from "@/shell/shell"
+import { Shell } from "@opencode-ai/core/shell"
 import { ShellID } from "./shell/id"
 
 import * as Truncate from "./truncate"
@@ -260,11 +260,7 @@ const parse = Effect.fn("ShellTool.parse")(function* (command: string, ps: boole
   return tree
 })
 
-const ask = Effect.fn("ShellTool.ask")(function* (
-  ctx: Tool.Context,
-  scan: Scan,
-  input: { command: string; description: string },
-) {
+const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan, input: { command: string }) {
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
     const globs = directories.map((dir) => {
@@ -277,7 +273,6 @@ const ask = Effect.fn("ShellTool.ask")(function* (
       always: globs,
       metadata: {
         command: input.command,
-        description: input.description,
         directories,
         patterns: globs,
       },
@@ -291,7 +286,6 @@ const ask = Effect.fn("ShellTool.ask")(function* (
     always: Array.from(scan.always),
     metadata: {
       command: input.command,
-      description: input.description,
     },
   })
 })
@@ -387,7 +381,6 @@ export const ShellTool = Tool.define(
       ps: boolean,
       shell: string,
       instance: InstanceContext,
-      additionalDirectories?: string[],
     ) {
       const scan: Scan = {
         dirs: new Set<string>(),
@@ -405,7 +398,7 @@ export const ShellTool = Tool.define(
           for (const arg of pathArgs(command, ps, shellKind === "cmd")) {
             const resolved = yield* argPath(arg, cwd, ps, shell)
             yield* Effect.logInfo("resolved path", { arg, resolved })
-            if (!resolved || containsPath(resolved, instance, additionalDirectories)) continue
+            if (!resolved || containsPath(resolved, instance)) continue
             const dir = (yield* fs.isDir(resolved)) ? resolved : path.dirname(resolved)
             scan.dirs.add(dir)
           }
@@ -439,7 +432,6 @@ export const ShellTool = Tool.define(
         cwd: string
         env: NodeJS.ProcessEnv
         timeout: number
-        description: string
       },
       ctx: Tool.Context,
     ) {
@@ -483,7 +475,6 @@ export const ShellTool = Tool.define(
       yield* ctx.metadata({
         metadata: {
           output: "",
-          description: input.description,
         },
       })
 
@@ -524,7 +515,6 @@ export const ShellTool = Tool.define(
                       ctx.metadata({
                         metadata: {
                           output: last,
-                          description: input.description,
                         },
                       }),
                     ),
@@ -535,7 +525,6 @@ export const ShellTool = Tool.define(
               return ctx.metadata({
                 metadata: {
                   output: last,
-                  description: input.description,
                 },
               })
             }),
@@ -594,11 +583,10 @@ export const ShellTool = Tool.define(
         output += "\n\n<shell_metadata>\n" + meta.join("\n") + "\n</shell_metadata>"
       }
       return {
-        title: input.description,
+        title: input.command,
         metadata: {
           output: last || preview(output),
           exit: code,
-          description: input.description,
           truncated: cut,
           ...(cut && file ? { outputPath: file } : {}),
         },
@@ -629,14 +617,13 @@ export const ShellTool = Tool.define(
               }
               const timeout = params.timeout ?? defaultTimeoutMs
               const ps = Shell.ps(shell)
-              const additionalDirs = ctx.extra?.additionalDirectories as string[] | undefined
               yield* Effect.scoped(
                 Effect.gen(function* () {
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
                   )
-                  const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx, additionalDirs)
-                  if (!containsPath(cwd, instanceCtx, additionalDirs)) scan.dirs.add(cwd)
+                  const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx)
+                  if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   yield* ask(ctx, scan, params)
                 }),
               )
@@ -648,7 +635,6 @@ export const ShellTool = Tool.define(
                   cwd,
                   env: yield* shellEnv(ctx, cwd),
                   timeout,
-                  description: params.description,
                 },
                 ctx,
               )

@@ -14,7 +14,6 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
-import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -28,10 +27,10 @@ import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { AbsolutePath, type DeepMutable } from "@opencode-ai/core/schema"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
-import { LocationServiceMap } from "@opencode-ai/core/location-layer"
-import { PluginBoot } from "@opencode-ai/core/plugin/boot"
+import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { Reference } from "@opencode-ai/core/reference"
 import { Location } from "@opencode-ai/core/location"
+import { PluginV2 } from "@opencode-ai/core/plugin"
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -86,7 +85,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Ag
 
 export const use = serviceUse(Service)
 
-export const layer = Layer.effect(
+const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.Service
@@ -94,16 +93,18 @@ export const layer = Layer.effect(
     const plugin = yield* Plugin.Service
     const skill = yield* Skill.Service
     const provider = yield* Provider.Service
-    const locations = yield* LocationServiceMap
+    const locations = yield* LocationServiceMap.Service
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("Agent.state")(function* (ctx) {
         const cfg = yield* config.get()
         const skillDirs = yield* skill.dirs()
-        const referenceDirs = yield* Effect.gen(function* () {
-          yield* (yield* PluginBoot.Service).wait()
-          return (yield* (yield* Reference.Service).list()).map((reference) => reference.path)
-        }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
+        const referenceDirs = Object.keys(cfg.references ?? cfg.reference ?? {}).length
+          ? yield* Effect.gen(function* () {
+              yield* (yield* PluginV2.Service).wait(PluginV2.ID.make("core/config-reference"))
+              return (yield* (yield* Reference.Service).list()).map((reference) => reference.path)
+            }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
+          : []
         const whitelistedDirs = [
           Truncate.GLOB,
           path.join(Global.Path.tmp, "*"),
@@ -177,23 +178,6 @@ export const layer = Layer.effect(
             ),
             mode: "primary",
             native: true,
-          },
-          architect: {
-            name: "architect",
-            description:
-              "Software architect mode for deep thinking, research, and design before implementation. Use this for complex features, architectural decisions, or when thorough analysis is needed.",
-            options: {},
-            permission: Permission.merge(
-              defaults,
-              Permission.fromConfig({
-                question: "allow",
-                plan_enter: "allow",
-              }),
-              user,
-            ),
-            mode: "primary",
-            native: true,
-            prompt: PROMPT_ARCHITECT,
           },
           general: {
             name: "general",
@@ -454,24 +438,16 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer.pipe(
-  Layer.provide(Plugin.defaultLayer),
-  Layer.provide(Provider.defaultLayer),
-  Layer.provide(Auth.defaultLayer),
-  Layer.provide(Config.defaultLayer),
-  Layer.provide(Skill.defaultLayer),
-  Layer.provide(LocationServiceMap.layer),
-)
+const locationServiceMapNode = LayerNode.make({
+  service: LocationServiceMap.Service,
+  layer: locationServiceMapLayer,
+  deps: [],
+})
 
-const locationServiceMapNode = LayerNode.make(LocationServiceMap.layer, [])
-
-export const node = LayerNode.make(layer, [
-  Config.node,
-  Auth.node,
-  Plugin.node,
-  Skill.node,
-  Provider.node,
-  locationServiceMapNode,
-])
+export const node = LayerNode.make({
+  service: Service,
+  layer: layer,
+  deps: [Config.node, Auth.node, Plugin.node, Skill.node, Provider.node, locationServiceMapNode],
+})
 
 export * as Agent from "./agent"

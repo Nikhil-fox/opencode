@@ -1,4 +1,4 @@
-// Top-level orchestrator for `run --interactive`.
+// Top-level orchestrator for `opencode --mini`.
 //
 // Wires the boot sequence, lifecycle (renderer + footer), stream transport,
 // and prompt queue together into a single session loop. Two entry points:
@@ -753,9 +753,7 @@ export async function runInteractiveLocalMode(input: RunLocalInput): Promise<voi
         return session
       }
 
-      session = (async () => {
-        const agent = await input.resolveAgent()
-        const next = await input.session(sdk)
+      session = Promise.all([input.resolveAgent(), input.session(sdk)]).then(([agent, next]) => {
         if (!next?.id) {
           throw new Error("Session not found")
         }
@@ -766,7 +764,7 @@ export async function runInteractiveLocalMode(input: RunLocalInput): Promise<voi
           sessionTitle: next.title,
           agent,
         }
-      })()
+      })
       return session
     },
     createSession: createSessionResolver(input.createSession),
