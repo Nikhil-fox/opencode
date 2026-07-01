@@ -1737,12 +1737,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
           throw error
         }
-        if (!path.isAbsolute(pathToAdd)) {
-          const error = new NamedError.Unknown({ message: `Path must be absolute: ${pathToAdd}` })
-          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
-          throw error
-        }
-        const normalized = path.resolve(pathToAdd)
+        const ctx = yield* InstanceState.context
+        const expanded = pathToAdd.startsWith("~") ? path.join(os.homedir(), pathToAdd.slice(1)) : pathToAdd
+        const normalized = path.resolve(ctx.directory, expanded)
         const stats = yield* Effect.promise(() => fs.stat(normalized).catch(() => null))
         if (!stats?.isDirectory()) {
           const error = new NamedError.Unknown({ message: `Path does not exist or is not a directory: ${pathToAdd}` })
@@ -1756,7 +1753,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           throw error
         }
         yield* sessions.addDirectory({ sessionID: input.sessionID, path: normalized })
-        const ctx = yield* InstanceState.context
         const msg: SessionV1.Assistant = {
           id: input.messageID ?? MessageID.ascending(),
           sessionID: input.sessionID,
@@ -1796,7 +1792,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
           throw error
         }
-        const normalized = path.resolve(pathToRemove)
+        const ctx = yield* InstanceState.context
+        const expanded = pathToRemove.startsWith("~") ? path.join(os.homedir(), pathToRemove.slice(1)) : pathToRemove
+        const normalized = path.resolve(ctx.directory, expanded)
         const existing = yield* sessions.getDirectories(input.sessionID)
         if (!existing.includes(normalized)) {
           const error = new NamedError.Unknown({ message: `Directory not found in session: ${pathToRemove}` })
@@ -1804,7 +1802,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           throw error
         }
         yield* sessions.removeDirectory({ sessionID: input.sessionID, path: normalized })
-        const ctx = yield* InstanceState.context
         const msg: SessionV1.Assistant = {
           id: input.messageID ?? MessageID.ascending(),
           sessionID: input.sessionID,

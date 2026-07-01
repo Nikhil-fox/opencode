@@ -294,6 +294,9 @@ export function Prompt(props: PromptProps) {
     return {
       context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
       tps: tps ? `${Locale.number(tps)} t/s` : undefined,
+      cache: last.tokens.cache.read > 0 || last.tokens.cache.write > 0
+        ? `↓${Locale.number(last.tokens.cache.read)} ↑${Locale.number(last.tokens.cache.write)}`
+        : undefined,
       cost: cost > 0 ? money.format(cost) : undefined,
     }
   })
@@ -1673,7 +1676,7 @@ export function Prompt(props: PromptProps) {
                     <Match when={usage()}>
                       {(item) => (
                         <text fg={theme.textMuted} wrapMode="none">
-                          {[item().context, item().tps, item().cost].filter(Boolean).join(" · ")}
+                          {[item().context, item().tps, item().cache, item().cost].filter(Boolean).join(" · ")}
                         </text>
                       )}
                     </Match>

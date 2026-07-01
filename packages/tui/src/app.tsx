@@ -55,6 +55,7 @@ import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
 import { DialogConfirm } from "./ui/dialog-confirm"
+import { DialogPrompt } from "./ui/dialog-prompt"
 import { ToastProvider, useToast } from "./ui/toast"
 import { isDefaultTitle } from "./util/session"
 import { KVProvider, useKV } from "./context/kv"
@@ -605,6 +606,31 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         slashName: "directories",
         run: () => {
           dialog.replace(() => <DialogDirectoryList />)
+        },
+      },
+      {
+        name: "directory.add",
+        title: "Add directory",
+        category: "Session",
+        run: async () => {
+          const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+          if (!sessionID) {
+            toast.show({ message: "No active session to add a directory to", variant: "error" })
+            return
+          }
+          const input = await DialogPrompt.show(dialog, "Add directory", {
+            placeholder: "~/projects/my-app, ../other, or /absolute/path",
+          })
+          const value = input?.trim()
+          if (!value) return
+          const result = await sdk.client.session.command({ sessionID, command: "add-dir", arguments: value })
+          const error = result.error as { data?: { message?: string } } | undefined
+          if (error) {
+            toast.show({ message: error.data?.message ?? "Failed to add directory", variant: "error" })
+            return
+          }
+          toast.show({ message: `Added directory: ${value}`, variant: "success" })
+          dialog.clear()
         },
       },
       {
