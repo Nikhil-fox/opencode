@@ -1,17 +1,8 @@
-<<<<<<<< HEAD:packages/server/src/groups/message.ts
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
-import { InvalidCursorError, SessionNotFoundError, UnknownError } from "../errors"
-import { SessionLocationMiddleware } from "../middleware/session-location"
-========
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { InvalidCursorError, SessionNotFoundError, UnknownError } from "../errors"
->>>>>>>> upstream/dev:packages/protocol/src/groups/message.ts
 
 export const SessionMessagesQuery = Schema.Struct({
   limit: Schema.optional(
@@ -33,11 +24,7 @@ export const SessionMessagesQuery = Schema.Struct({
 export const MessageGroup = HttpApiGroup.make("server.message")
   .add(
     HttpApiEndpoint.get("session.messages", "/api/session/:sessionID/message", {
-<<<<<<<< HEAD:packages/server/src/groups/message.ts
-      params: { sessionID: SessionV2.ID },
-========
       params: { sessionID: Session.ID },
->>>>>>>> upstream/dev:packages/protocol/src/groups/message.ts
       query: SessionMessagesQuery,
       success: Schema.Struct({
         data: Schema.Array(SessionMessage.Message),
@@ -47,18 +34,6 @@ export const MessageGroup = HttpApiGroup.make("server.message")
         }),
       }).annotate({ identifier: "SessionMessagesResponse" }),
       error: [InvalidCursorError, SessionNotFoundError, UnknownError],
-<<<<<<<< HEAD:packages/server/src/groups/message.ts
-    })
-      .middleware(SessionLocationMiddleware)
-      .annotateMerge(
-        OpenApi.annotations({
-          identifier: "v2.session.messages",
-          summary: "Get session messages",
-          description:
-            "Retrieve projected messages for a session. Items keep the requested order across pages; use cursor.next or cursor.previous to move through the ordered timeline.",
-        }),
-      ),
-========
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "v2.session.messages",
@@ -67,7 +42,6 @@ export const MessageGroup = HttpApiGroup.make("server.message")
           "Retrieve projected messages for a session. Items keep the requested order across pages; use cursor.next or cursor.previous to move through the ordered timeline.",
       }),
     ),
->>>>>>>> upstream/dev:packages/protocol/src/groups/message.ts
   )
   .annotateMerge(
     OpenApi.annotations({

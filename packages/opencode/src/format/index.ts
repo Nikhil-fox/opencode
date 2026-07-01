@@ -194,12 +194,6 @@ const layer = Layer.effect(
   }),
 )
 
-export const node = LayerNode.make({
-  service: Service,
-  layer: layer,
-  deps: [Config.node, AppProcess.node, RuntimeFlags.node],
-})
-
 export const node = LayerNode.make(layer, [Config.node, AppProcess.node, RuntimeFlags.node])
 
 export * as Format from "."
