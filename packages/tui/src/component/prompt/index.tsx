@@ -50,6 +50,7 @@ import { useKV } from "../../context/kv"
 import { createFadeIn } from "../../util/signal"
 import { DialogSkill } from "../dialog-skill"
 import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
+import { useAutoAccept } from "../../context/auto-accept"
 import { useArgs } from "../../context/args"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
 import { useTuiConfig } from "../../config"
@@ -208,6 +209,7 @@ export function Prompt(props: PromptProps) {
   const [cursorVersion, setCursorVersion] = createSignal(0)
   const currentProviderLabel = createMemo(() => local.model.parsed().provider)
   const hasRightContent = createMemo(() => Boolean(props.right))
+  const autoAccept = useAutoAccept()
 
   function promptModelWarning() {
     toast.show({
@@ -270,8 +272,16 @@ export function Prompt(props: PromptProps) {
     const model = sync.data.provider.find((item) => item.id === last.providerID)?.models[last.modelID]
     const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
     const cost = session?.cost ?? 0
+    const duration =
+      last.time.completed && last.time.created ? (last.time.completed - last.time.created) / 1000 : undefined
+    const tps =
+      duration && duration > 0 ? Math.round((last.tokens.output + last.tokens.reasoning) / duration) : undefined
     return {
       context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
+      tps: tps ? `${Locale.number(tps)} t/s` : undefined,
+      cache: last.tokens.cache.read > 0 || last.tokens.cache.write > 0
+        ? `↓${Locale.number(last.tokens.cache.read)} ↑${Locale.number(last.tokens.cache.write)}`
+        : undefined,
       cost: cost > 0 ? money.format(cost) : undefined,
     }
   })
@@ -1472,6 +1482,9 @@ export function Prompt(props: PromptProps) {
               <Show when={hasRightContent()}>
                 <box flexDirection="row" gap={1} alignItems="center">
                   {props.right}
+                  <Show when={autoAccept.autoaccept() === "edit"}>
+                    <text fg={theme.success}>auto-accept</text>
+                  </Show>
                 </box>
               </Show>
             </box>
@@ -1650,7 +1663,7 @@ export function Prompt(props: PromptProps) {
                     <Match when={usage()}>
                       {(item) => (
                         <text fg={theme.textMuted} wrapMode="none">
-                          {[item().context, item().cost].filter(Boolean).join(" · ")}
+                          {[item().context, item().tps, item().cache, item().cost].filter(Boolean).join(" · ")}
                         </text>
                       )}
                     </Match>

@@ -16,14 +16,23 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
   ctx: Tool.Context,
   target?: string,
   options?: Options,
+  additionalDirectories?: string[],
 ) {
   if (!target) return false
 
   if (options?.bypass) return false
 
   const ins = yield* InstanceState.context
-  const full = process.platform === "win32" ? FSUtil.normalizePath(target) : target
+  const resolved = path.resolve(target)
+  const full = process.platform === "win32" ? FSUtil.normalizePath(resolved) : resolved
   if (containsPath(full, ins)) return false
+
+  if (additionalDirectories) {
+    for (const dir of additionalDirectories) {
+      const normalizedDir = process.platform === "win32" ? FSUtil.normalizePath(path.resolve(dir)) : path.resolve(dir)
+      if (FSUtil.contains(normalizedDir, full)) return false
+    }
+  }
 
   const kind = options?.kind ?? "file"
   const dir = kind === "directory" ? full : path.dirname(full)
@@ -44,6 +53,11 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
   return true
 })
 
-export async function assertExternalDirectory(ctx: Tool.Context, target?: string, options?: Options) {
-  return Effect.runPromise(assertExternalDirectoryEffect(ctx, target, options))
+export async function assertExternalDirectory(
+  ctx: Tool.Context,
+  target?: string,
+  options?: Options,
+  additionalDirectories?: string[],
+) {
+  return Effect.runPromise(assertExternalDirectoryEffect(ctx, target, options, additionalDirectories))
 }

@@ -174,3 +174,13 @@ export const SessionContextEpochTable = sqliteTable("session_context_epoch", {
   snapshot: text({ mode: "json" }).notNull().$type<SystemContext.Snapshot>(),
   baseline_seq: integer().notNull(),
 })
+
+export const SessionAdditionalDirectoryTable = sqliteTable("session_additional_directory", {
+  id: text().primaryKey(),
+  session_id: text()
+    .notNull()
+    .references(() => SessionTable.id, { onDelete: "cascade" }),
+  path: text().notNull(),
+  time_created: integer().notNull(),
+  time_updated: integer().notNull(),
+})

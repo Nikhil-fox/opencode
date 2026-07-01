@@ -9,6 +9,8 @@ import { MCP } from "../mcp"
 import { Skill } from "../skill"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
+import PROMPT_ADD_DIR from "./template/add-dir.txt"
+import PROMPT_REMOVE_DIR from "./template/remove-dir.txt"
 import { LegacyEvent } from "@opencode-ai/schema/legacy-event"
 
 type State = {
@@ -46,6 +48,8 @@ export function hints(template: string) {
 export const Default = {
   INIT: "init",
   REVIEW: "review",
+  ADD_DIR: "add-dir",
+  REMOVE_DIR: "remove-dir",
 } as const
 
 export interface Interface {
@@ -85,6 +89,24 @@ const layer = Layer.effect(
         },
         subtask: true,
         hints: hints(PROMPT_REVIEW),
+      }
+      commands[Default.ADD_DIR] = {
+        name: Default.ADD_DIR,
+        description: "add an additional working directory to this session",
+        source: "command",
+        get template() {
+          return PROMPT_ADD_DIR
+        },
+        hints: hints(PROMPT_ADD_DIR),
+      }
+      commands[Default.REMOVE_DIR] = {
+        name: Default.REMOVE_DIR,
+        description: "remove an additional working directory from this session",
+        source: "command",
+        get template() {
+          return PROMPT_REMOVE_DIR
+        },
+        hints: hints(PROMPT_REMOVE_DIR),
       }
 
       for (const [name, command] of Object.entries(cfg.command ?? {})) {

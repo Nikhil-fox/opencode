@@ -1,17 +1,10 @@
-Add an additional working directory to the current session.
+Add an additional working directory to this session so all tools can access files within it.
 
 Usage: /add-dir <path>
 
-This will:
-1. Validate the path exists and is a directory
-2. Add it to the session's allowed directories
-3. Allow all tools (read, edit, glob, grep, bash) to access files in this directory
-4. Include the directory in the AI's context
+The path can be:
+- An absolute path: /home/user/projects/my-app
+- A path relative to the current directory: ../other-project
+- A home directory path: ~/projects/my-app
 
-The directory access is session-scoped only and will not persist across sessions.
-
-Arguments:
-  $1 - Absolute path to the directory to add
-
-Example:
-  /add-dir /home/user/projects/shared-lib
+Files in the added directory become accessible to all tools (read, write, edit, grep, glob, etc.) for the duration of this session.

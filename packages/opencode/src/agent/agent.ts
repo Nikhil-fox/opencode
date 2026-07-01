@@ -14,6 +14,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -261,6 +262,15 @@ const layer = Layer.effect(
               user,
             ),
             prompt: PROMPT_SUMMARY,
+          },
+          architect: {
+            name: "architect",
+            description: "Senior software architect that researches thoroughly, designs robust solutions, then implements with surgical precision.",
+            prompt: PROMPT_ARCHITECT,
+            permission: Permission.merge(defaults, user),
+            options: {},
+            mode: "primary",
+            native: true,
           },
         }
 

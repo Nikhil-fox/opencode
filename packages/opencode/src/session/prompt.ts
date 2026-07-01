@@ -3,6 +3,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import path from "path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import os from "os"
+import { stat } from "fs/promises"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { SessionRevert } from "./revert"
@@ -1223,6 +1224,8 @@ const layer = Layer.effect(
             const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
             const promptOps = yield* ops()
 
+            const additionalDirectories = yield* sessions.getDirectories(sessionID)
+
             const tools = yield* SessionTools.resolve({
               agent,
               session,
@@ -1231,6 +1234,7 @@ const layer = Layer.effect(
               bypassAgentCheck,
               messages: msgs,
               promptOps,
+              additionalDirectories,
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),
@@ -1255,7 +1259,7 @@ const layer = Layer.effect(
 
             const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
-              sys.environment(model),
+              sys.environment(model, additionalDirectories),
               instruction.system().pipe(Effect.orDie),
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
@@ -1366,6 +1370,111 @@ const layer = Layer.effect(
         yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
         throw error
       }
+
+      if (input.command === Command.Default.ADD_DIR) {
+        const pathToAdd = input.arguments.trim()
+        if (!pathToAdd) {
+          const error = new NamedError.Unknown({ message: "Path is required. Usage: /add-dir <path>" })
+          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const ctx = yield* InstanceState.context
+        const expanded = pathToAdd.startsWith("~") ? path.join(os.homedir(), pathToAdd.slice(1)) : pathToAdd
+        const normalized = path.resolve(ctx.directory, expanded)
+        const stats = yield* Effect.promise(() => stat(normalized).catch(() => null))
+        if (!stats?.isDirectory()) {
+          const error = new NamedError.Unknown({ message: `Path does not exist or is not a directory: ${pathToAdd}` })
+          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const existing = yield* sessions.getDirectories(input.sessionID)
+        if (existing.includes(normalized)) {
+          const error = new NamedError.Unknown({ message: `Directory already added: ${pathToAdd}` })
+          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        yield* sessions.addDirectory({ sessionID: input.sessionID, path: normalized })
+        const msg: SessionV1.Assistant = {
+          id: input.messageID ?? MessageID.ascending(),
+          sessionID: input.sessionID,
+          parentID: MessageID.ascending(),
+          mode: "",
+          agent: "",
+          cost: 0,
+          path: { cwd: ctx.directory, root: ctx.worktree },
+          time: { created: Date.now() },
+          role: "assistant",
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelV2.ID.make(""),
+          providerID: ProviderV2.ID.make(""),
+        }
+        yield* sessions.updateMessage(msg)
+        const part: SessionV1.TextPart = {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: msg.id,
+          sessionID: input.sessionID,
+          text: `Added additional directory: ${normalized}\n\nFiles in this directory are now accessible to all tools for this session.`,
+        }
+        yield* sessions.updatePart(part)
+        yield* events.publish(Command.Event.Executed, {
+          name: input.command,
+          sessionID: input.sessionID,
+          arguments: input.arguments,
+          messageID: msg.id,
+        })
+        return { info: msg, parts: [part] }
+      }
+
+      if (input.command === Command.Default.REMOVE_DIR) {
+        const pathToRemove = input.arguments.trim()
+        if (!pathToRemove) {
+          const error = new NamedError.Unknown({ message: "Path is required. Usage: /remove-dir <path>" })
+          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        const ctx = yield* InstanceState.context
+        const expanded = pathToRemove.startsWith("~") ? path.join(os.homedir(), pathToRemove.slice(1)) : pathToRemove
+        const normalized = path.resolve(ctx.directory, expanded)
+        const existing = yield* sessions.getDirectories(input.sessionID)
+        if (!existing.includes(normalized)) {
+          const error = new NamedError.Unknown({ message: `Directory not found in session: ${pathToRemove}` })
+          yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+          throw error
+        }
+        yield* sessions.removeDirectory({ sessionID: input.sessionID, path: normalized })
+        const msg: SessionV1.Assistant = {
+          id: input.messageID ?? MessageID.ascending(),
+          sessionID: input.sessionID,
+          parentID: MessageID.ascending(),
+          mode: "",
+          agent: "",
+          cost: 0,
+          path: { cwd: ctx.directory, root: ctx.worktree },
+          time: { created: Date.now() },
+          role: "assistant",
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelV2.ID.make(""),
+          providerID: ProviderV2.ID.make(""),
+        }
+        yield* sessions.updateMessage(msg)
+        const part: SessionV1.TextPart = {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: msg.id,
+          sessionID: input.sessionID,
+          text: `Removed additional directory: ${normalized}\n\nFiles in this directory are no longer accessible for this session.`,
+        }
+        yield* sessions.updatePart(part)
+        yield* events.publish(Command.Event.Executed, {
+          name: input.command,
+          sessionID: input.sessionID,
+          arguments: input.arguments,
+          messageID: msg.id,
+        })
+        return { info: msg, parts: [part] }
+      }
+
       const agentName = cmd.agent ?? input.agent
 
       const raw = input.arguments.match(argsRegex) ?? []

@@ -78,6 +78,7 @@ import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
 import { DialogRetryAction } from "../../component/dialog-retry-action"
+import { useAutoAccept } from "../../context/auto-accept"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
@@ -234,6 +235,22 @@ export function Session() {
   })
   const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
+
+  const autoAccept = useAutoAccept()
+
+  createEffect(() => {
+    const perms = permissions()
+    if (autoAccept.autoaccept() === "none" || perms.length === 0) return
+
+    for (const perm of perms) {
+      if (perm.permission === "edit") {
+        sdk.client.permission.reply({
+          reply: "once",
+          requestID: perm.id,
+        })
+      }
+    }
+  })
 
   const pending = createMemo(() => {
     const completed = messages().findLast((x) => x.role === "assistant" && x.time.completed)?.id

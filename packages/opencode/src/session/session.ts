@@ -26,7 +26,7 @@ import { inArray } from "drizzle-orm"
 import { lt } from "drizzle-orm"
 import { or } from "drizzle-orm"
 import type { SQL } from "drizzle-orm"
-import { PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { PartTable, SessionTable, SessionAdditionalDirectoryTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
@@ -471,6 +471,9 @@ export interface Interface {
     sessionID: SessionID,
     predicate: (msg: SessionV1.WithParts) => boolean,
   ) => Effect.Effect<Option.Option<SessionV1.WithParts>, NotFound>
+  readonly addDirectory: (input: { sessionID: SessionID; path: string }) => Effect.Effect<void>
+  readonly removeDirectory: (input: { sessionID: SessionID; path: string }) => Effect.Effect<void>
+  readonly getDirectories: (sessionID: SessionID) => Effect.Effect<string[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Session") {}
@@ -905,6 +908,48 @@ const layer: Layer.Layer<
       return Option.none<SessionV1.WithParts>()
     })
 
+    const addDirectory = Effect.fn("Session.addDirectory")(function* (input: { sessionID: SessionID; path: string }) {
+      const normalized = path.resolve(input.path)
+      yield* db
+        .insert(SessionAdditionalDirectoryTable)
+        .values({
+          id: crypto.randomUUID(),
+          session_id: input.sessionID,
+          path: normalized,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        })
+        .onConflictDoNothing()
+        .run()
+      yield* patch(input.sessionID, { time: { updated: Date.now() } })
+    })
+
+    const removeDirectory = Effect.fn("Session.removeDirectory")(function* (input: {
+      sessionID: SessionID
+      path: string
+    }) {
+      const normalized = path.resolve(input.path)
+      yield* db
+        .delete(SessionAdditionalDirectoryTable)
+        .where(
+          and(
+            eq(SessionAdditionalDirectoryTable.session_id, input.sessionID),
+            eq(SessionAdditionalDirectoryTable.path, normalized),
+          ),
+        )
+        .run()
+      yield* patch(input.sessionID, { time: { updated: Date.now() } })
+    })
+
+    const getDirectories = Effect.fn("Session.getDirectories")(function* (sessionID: SessionID) {
+      const rows = yield* db
+        .select({ path: SessionAdditionalDirectoryTable.path })
+        .from(SessionAdditionalDirectoryTable)
+        .where(eq(SessionAdditionalDirectoryTable.session_id, sessionID))
+        .all()
+      return rows.map((r) => r.path)
+    })
+
     return Service.of({
       list,
       listGlobal,
@@ -933,6 +978,9 @@ const layer: Layer.Layer<
       getPart,
       updatePartDelta,
       findMessage,
+      addDirectory,
+      removeDirectory,
+      getDirectories,
     })
   }),
 )

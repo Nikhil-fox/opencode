@@ -48,6 +48,8 @@ import { DialogAgent } from "./component/dialog-agent"
 import { DialogSessionList } from "./component/dialog-session-list"
 import { DialogWorkspaceList } from "./component/dialog-workspace-list"
 import { DialogConsoleOrg } from "./component/dialog-console-org"
+import { DialogDirectoryList } from "./component/dialog-directory-list"
+import { AutoAcceptProvider, useAutoAccept } from "./context/auto-accept"
 import { ThemeProvider, useTheme } from "./context/theme"
 import { Home } from "./routes/home"
 import { Session } from "./routes/session"
@@ -56,6 +58,7 @@ import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
 import { DialogConfirm } from "./ui/dialog-confirm"
+import { DialogPrompt } from "./ui/dialog-prompt"
 import { ToastProvider, useToast } from "./ui/toast"
 import { isDefaultTitle } from "./util/session"
 import { KVProvider, useKV } from "./context/kv"
@@ -132,6 +135,7 @@ const appBindingCommands = [
   "app.toggle.diffwrap",
   "app.toggle.paste_summary",
   "app.toggle.session_directory_filter",
+  "permission.auto_accept.toggle",
 ] as const
 
 export type TuiInput = {
@@ -310,10 +314,12 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                               <PromptRefProvider>
                                                                 <EditorContextProvider>
                                                                   <LocationProvider>
-                                                                    <App
-                                                                      onSnapshot={input.onSnapshot}
-                                                                      pluginHost={input.pluginHost}
-                                                                    />
+                                                                    <AutoAcceptProvider>
+                                                                      <App
+                                                                        onSnapshot={input.onSnapshot}
+                                                                        pluginHost={input.pluginHost}
+                                                                      />
+                                                                    </AutoAcceptProvider>
                                                                   </LocationProvider>
                                                                 </EditorContextProvider>
                                                               </PromptRefProvider>
@@ -367,6 +373,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   const local = useLocal()
   const kv = useKV()
   const keymap = useOpencodeKeymap()
+  const autoAccept = useAutoAccept()
   const event = useEvent()
   const sdk = useSDK()
   const toast = useToast()
@@ -610,6 +617,40 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         slashName: "workspaces",
         run: () => {
           dialog.replace(() => <DialogWorkspaceList />)
+        },
+      },
+      {
+        name: "directory.list",
+        title: "Manage directories",
+        category: "Session",
+        slashName: "directories",
+        run: () => {
+          dialog.replace(() => <DialogDirectoryList />)
+        },
+      },
+      {
+        name: "directory.add",
+        title: "Add directory",
+        category: "Session",
+        run: async () => {
+          const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+          if (!sessionID) {
+            toast.show({ message: "No active session to add a directory to", variant: "error" })
+            return
+          }
+          const input = await DialogPrompt.show(dialog, "Add directory", {
+            placeholder: "~/projects/my-app, ../other, or /absolute/path",
+          })
+          const value = input?.trim()
+          if (!value) return
+          const result = await sdk.client.session.command({ sessionID, command: "add-dir", arguments: value })
+          const error = result.error as { data?: { message?: string } } | undefined
+          if (error) {
+            toast.show({ message: error.data?.message ?? "Failed to add directory", variant: "error" })
+            return
+          }
+          toast.show({ message: `Added directory: ${value}`, variant: "success" })
+          dialog.clear()
         },
       },
       ...Array.from({ length: 9 }, (_, i) => ({
@@ -930,12 +971,13 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         },
       },
       {
-        name: "permission.mode",
-        title:
-          local.permission.mode === "auto" ? "Disable auto-approve permissions" : "Enable auto-approve permissions",
+        name: "permission.auto_accept.toggle",
+        title: autoAccept.autoaccept() === "none" ? "Enable auto-accept edits" : "Disable auto-accept edits",
         category: "System",
+        slashName: "auto-accept",
         run: () => {
-          local.permission.toggle()
+          const next = autoAccept.autoaccept() === "none" ? "edit" : "none"
+          autoAccept.setAutoaccept(next)
           dialog.clear()
         },
       },

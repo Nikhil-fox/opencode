@@ -15,11 +15,8 @@ export function DialogDirectoryList() {
 
   const [toDelete, setToDelete] = createSignal<string>()
 
-  const [dirs, { refetch }] = createResource(sessionID, async (id) => {
-    if (!id) return []
-    const result = await sdk.client.session.directories({ sessionID: id })
-    if (result.error) return []
-    return (result.data as string[]) ?? []
+  const [dirs, { refetch }] = createResource(sessionID, async () => {
+    return [] as string[]
   })
 
   const options = createMemo(() => {
