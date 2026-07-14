@@ -29,6 +29,10 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
+  ExperimentalBackgroundJobsCancelErrors,
+  ExperimentalBackgroundJobsCancelResponses,
+  ExperimentalBackgroundJobsListErrors,
+  ExperimentalBackgroundJobsListResponses,
   ExperimentalCapabilitiesGetErrors,
   ExperimentalCapabilitiesGetResponses,
   ExperimentalConsoleGetErrors,
@@ -189,6 +193,8 @@ import type {
   SessionDeleteResponses,
   SessionDiffErrors,
   SessionDiffResponses,
+  SessionDirectoriesErrors,
+  SessionDirectoriesResponses,
   SessionForkErrors,
   SessionForkResponses,
   SessionGetErrors,
@@ -205,6 +211,8 @@ import type {
   SessionPromptAsyncResponses,
   SessionPromptErrors,
   SessionPromptResponses,
+  SessionRemoveDirectoryErrors,
+  SessionRemoveDirectoryResponses,
   SessionRevertErrors,
   SessionRevertResponses,
   SessionShareErrors,
@@ -922,6 +930,78 @@ export class Resource extends HeyApiClient {
   }
 }
 
+export class BackgroundJobs extends HeyApiClient {
+  /**
+   * List background jobs
+   *
+   * Get all background jobs (shell commands and subagents) with their current status.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBackgroundJobsListResponses,
+      ExperimentalBackgroundJobsListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/background-jobs",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Cancel a background job
+   *
+   * Cancel a running background job by its ID.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      jobId: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "jobId" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalBackgroundJobsCancelResponses,
+      ExperimentalBackgroundJobsCancelErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/background-jobs/{jobId}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class ProjectCopy extends HeyApiClient {
   /**
    * Generate project copy name
@@ -1264,6 +1344,11 @@ export class Experimental extends HeyApiClient {
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
+  }
+
+  private _backgroundJobs?: BackgroundJobs
+  get backgroundJobs(): BackgroundJobs {
+    return (this._backgroundJobs ??= new BackgroundJobs({ client: this.client }))
   }
 
   private _projectCopy?: ProjectCopy
@@ -1768,6 +1853,7 @@ export class Find extends HeyApiClient {
       dirs?: "true" | "false"
       type?: "file" | "directory"
       limit?: number
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1782,6 +1868,7 @@ export class Find extends HeyApiClient {
             { in: "query", key: "dirs" },
             { in: "query", key: "type" },
             { in: "query", key: "limit" },
+            { in: "query", key: "sessionID" },
           ],
         },
       ],
@@ -4323,6 +4410,81 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}/unrevert",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Get additional directories
+   *
+   * Get the list of additional working directories added to the session.
+   */
+  public directories<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionDirectoriesResponses, SessionDirectoriesErrors, ThrowOnError>({
+      url: "/session/{sessionID}/directories",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Remove additional directory
+   *
+   * Remove an additional working directory from the session.
+   */
+  public removeDirectory<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      SessionRemoveDirectoryResponses,
+      SessionRemoveDirectoryErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/directory",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }

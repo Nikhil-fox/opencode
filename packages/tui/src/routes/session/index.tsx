@@ -77,6 +77,7 @@ import { nextThinkingMode, reasoningSummary, useThinkingMode, type ThinkingMode 
 import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
+import { BackgroundJobsBar } from "../../component/background-jobs-bar"
 import { DialogRetryAction } from "../../component/dialog-retry-action"
 import { useAutoAccept } from "../../context/auto-accept"
 import { getRevertDiffFiles } from "../../util/revert-diff"
@@ -1161,7 +1162,7 @@ export function Session() {
 
   return (
     <LocationProvider location={location()}>
-      <context.Provider
+        <context.Provider
         value={{
           get width() {
             return contentWidth()
@@ -1179,7 +1180,9 @@ export function Session() {
           tui: tuiConfig,
         }}
       >
-        <box flexDirection="row" flexGrow={1} minHeight={0}>
+        <box flexDirection="column" flexGrow={1} minHeight={0}>
+          <BackgroundJobsBar width={contentWidth()} />
+          <box flexDirection="row" flexGrow={1} minHeight={0}>
           <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
             <Show when={session()}>
               <scrollbox
@@ -1358,6 +1361,7 @@ export function Session() {
               </Match>
             </Switch>
           </Show>
+        </box>
         </box>
       </context.Provider>
     </LocationProvider>
@@ -1775,6 +1779,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={display() === "task"}>
           <Task {...toolprops} />
         </Match>
+        <Match when={display() === "background_shell"}>
+          <BackgroundShellTool {...toolprops} />
+        </Match>
         <Match when={display() === "apply_patch"}>
           <ApplyPatch {...toolprops} />
         </Match>
@@ -1837,6 +1844,25 @@ function GenericTool(props: ToolProps) {
         </box>
       </BlockTool>
     </Show>
+  )
+}
+
+function BackgroundShellTool(props: ToolProps) {
+  const action = createMemo(() => stringValue(props.input.action) ?? "start")
+  const command = createMemo(() => stringValue(props.input.command))
+  const jobId = createMemo(() => stringValue(props.metadata.jobId))
+
+  const label = createMemo(() => {
+    if (action() === "start") return command() ?? "background command"
+    if (action() === "status") return `status ${jobId() ?? ""}`
+    if (action() === "cancel") return `cancel ${jobId() ?? ""}`
+    return "background jobs"
+  })
+
+  return (
+    <InlineTool icon="$" complete={true} pending="Starting..." part={props.part}>
+      {label()}
+    </InlineTool>
   )
 }
 
@@ -2591,6 +2617,7 @@ const toolDisplays = new Set([
   "write",
   "edit",
   "task",
+  "background_shell",
   "apply_patch",
   "todowrite",
   "question",

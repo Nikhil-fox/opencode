@@ -10,6 +10,7 @@ import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
+import { BackgroundShellTool } from "./background-shell"
 import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
@@ -90,6 +91,7 @@ const layer = Layer.effect(
 
     const invalid = yield* InvalidTool
     const task = yield* TaskTool
+    const bgshell = yield* BackgroundShellTool
     const read = yield* ReadTool
     const question = yield* QuestionTool
     const todo = yield* TodoWriteTool
@@ -203,6 +205,7 @@ const layer = Layer.effect(
           edit: Tool.init(edit),
           write: Tool.init(writetool),
           task: Tool.init(task),
+          background_shell: Tool.init(bgshell),
           fetch: Tool.init(webfetch),
           todo: Tool.init(todo),
           search: Tool.init(websearch),
@@ -225,6 +228,7 @@ const layer = Layer.effect(
             tool.edit,
             tool.write,
             tool.task,
+            ...(flags.experimentalBackgroundSubagents ? [tool.background_shell] : []),
             tool.fetch,
             tool.todo,
             tool.search,

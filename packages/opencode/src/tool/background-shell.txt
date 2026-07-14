@@ -1,0 +1,16 @@
+Run shell commands in the background and manage them by job ID.
+
+Actions:
+- start: Launch a shell command in the background. Returns immediately with a job ID and log file path.
+- status: Check the status and output of a background command by job ID.
+- cancel: Cancel a running background command by job ID.
+- list: List all background shell commands and their statuses.
+
+When to use background mode:
+- Long-running commands (builds, tests, servers, watchers) that would block the session
+- Commands whose output you want to check incrementally via the log file
+- When you need to continue working while a command runs
+
+You will be notified automatically when a background command finishes. Do NOT sleep or poll — use the "status" action only when you need to check intermediate output or confirm state before the notification arrives.
+
+The log file path returned by "start" and "status" (for running jobs) contains real-time output. Use the Read tool to inspect it when you need intermediate results.

@@ -99,7 +99,25 @@ export const ExperimentalPaths = {
   session: "/experimental/session",
   sessionBackground: "/experimental/session/:sessionID/background",
   resource: "/experimental/resource",
+  backgroundJobs: "/experimental/background-jobs",
+  backgroundJobCancel: "/experimental/background-jobs/:jobId/cancel",
 } as const
+
+const BackgroundJobStatus = Schema.Literals(["running", "completed", "error", "cancelled"])
+
+const BackgroundJobInfo = Schema.Struct({
+  id: Schema.String,
+  type: Schema.String,
+  title: Schema.optional(Schema.String),
+  status: BackgroundJobStatus,
+  started_at: Schema.Number,
+  completed_at: Schema.optional(Schema.Number),
+  output: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+}).annotate({ identifier: "BackgroundJobInfo" })
+
+const BackgroundJobList = Schema.Array(BackgroundJobInfo).annotate({ identifier: "BackgroundJobList" })
 
 export const ExperimentalApi = HttpApi.make("experimental")
   .add(
@@ -253,6 +271,28 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.resource.list",
             summary: "Get MCP resources",
             description: "Get all available MCP resources from connected servers. Optionally filter by name.",
+          }),
+        ),
+        HttpApiEndpoint.get("backgroundJobs", ExperimentalPaths.backgroundJobs, {
+          query: WorkspaceRoutingQuery,
+          success: described(BackgroundJobList, "Background jobs"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.background-jobs.list",
+            summary: "List background jobs",
+            description: "Get all background jobs (shell commands and subagents) with their current status.",
+          }),
+        ),
+        HttpApiEndpoint.post("backgroundJobCancel", ExperimentalPaths.backgroundJobCancel, {
+          params: { jobId: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(BackgroundJobInfo, "Cancelled background job"),
+          error: HttpApiError.NotFound,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.background-jobs.cancel",
+            summary: "Cancel a background job",
+            description: "Cancel a running background job by its ID.",
           }),
         ),
       )

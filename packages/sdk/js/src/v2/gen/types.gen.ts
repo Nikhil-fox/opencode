@@ -2249,6 +2249,22 @@ export type McpResource = {
   client: string
 }
 
+export type BackgroundJobInfo = {
+  id: string
+  type: string
+  title?: string
+  status: "running" | "completed" | "error" | "cancelled"
+  started_at: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  completed_at?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  output?: string
+  error?: string
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type BackgroundJobList = Array<BackgroundJobInfo>
+
 export type Symbol = {
   name: string
   kind: number
@@ -7884,6 +7900,72 @@ export type ExperimentalResourceListResponses = {
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
 
+export type ExperimentalBackgroundJobsListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/background-jobs"
+}
+
+export type ExperimentalBackgroundJobsListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBackgroundJobsListError =
+  ExperimentalBackgroundJobsListErrors[keyof ExperimentalBackgroundJobsListErrors]
+
+export type ExperimentalBackgroundJobsListResponses = {
+  /**
+   * Background jobs
+   */
+  200: BackgroundJobList
+}
+
+export type ExperimentalBackgroundJobsListResponse =
+  ExperimentalBackgroundJobsListResponses[keyof ExperimentalBackgroundJobsListResponses]
+
+export type ExperimentalBackgroundJobsCancelData = {
+  body?: never
+  path: {
+    jobId: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/background-jobs/{jobId}/cancel"
+}
+
+export type ExperimentalBackgroundJobsCancelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ExperimentalBackgroundJobsCancelError =
+  ExperimentalBackgroundJobsCancelErrors[keyof ExperimentalBackgroundJobsCancelErrors]
+
+export type ExperimentalBackgroundJobsCancelResponses = {
+  /**
+   * Cancelled background job
+   */
+  200: BackgroundJobInfo
+}
+
+export type ExperimentalBackgroundJobsCancelResponse =
+  ExperimentalBackgroundJobsCancelResponses[keyof ExperimentalBackgroundJobsCancelResponses]
+
 export type FindTextData = {
   body?: never
   path?: never
@@ -7939,6 +8021,7 @@ export type FindFilesData = {
     dirs?: "true" | "false"
     type?: "file" | "directory"
     limit?: number
+    sessionID?: string
   }
   url: "/find/file"
 }
@@ -10470,6 +10553,76 @@ export type PartUpdateResponses = {
 }
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
+
+export type SessionDirectoriesData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/directories"
+}
+
+export type SessionDirectoriesErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionDirectoriesError = SessionDirectoriesErrors[keyof SessionDirectoriesErrors]
+
+export type SessionDirectoriesResponses = {
+  /**
+   * List of directory paths
+   */
+  200: Array<string>
+}
+
+export type SessionDirectoriesResponse = SessionDirectoriesResponses[keyof SessionDirectoriesResponses]
+
+export type SessionRemoveDirectoryData = {
+  body?: {
+    path: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/directory"
+}
+
+export type SessionRemoveDirectoryErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionRemoveDirectoryError = SessionRemoveDirectoryErrors[keyof SessionRemoveDirectoryErrors]
+
+export type SessionRemoveDirectoryResponses = {
+  /**
+   * Successfully removed directory
+   */
+  200: boolean
+}
+
+export type SessionRemoveDirectoryResponse = SessionRemoveDirectoryResponses[keyof SessionRemoveDirectoryResponses]
 
 export type SyncStartData = {
   body?: never
