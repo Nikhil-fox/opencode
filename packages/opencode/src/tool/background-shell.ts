@@ -36,7 +36,7 @@ export const Parameters = Schema.Struct({
     description: "Working directory for the command (for 'start')",
   }),
   timeout: Schema.optional(Schema.Number).annotate({
-    description: `Timeout in milliseconds (default: ${DEFAULT_TIMEOUT})`,
+    description: `Timeout in milliseconds, 0 for no timeout (default: ${DEFAULT_TIMEOUT})`,
   }),
   job_id: Schema.optional(Schema.String).annotate({
     description: "The job ID (required for 'status' and 'cancel')",
@@ -205,18 +205,24 @@ export const BackgroundShellTool = Tool.define(
               ),
             )
 
-            const exit = yield* Effect.raceAll([
-              handle.exitCode.pipe(Effect.map((code) => ({ kind: "exit" as const, code }))),
-              Effect.sleep(`${timeout} millis`).pipe(
-                Effect.map(() => ({ kind: "timeout" as const, code: null })),
-              ),
-            ])
+            // When timeout is 0, run indefinitely until the process exits
+            // or the job is cancelled (scope interruption kills the process).
+            if (timeout > 0) {
+              const exit = yield* Effect.raceAll([
+                handle.exitCode.pipe(Effect.map((code) => ({ kind: "exit" as const, code }))),
+                Effect.sleep(`${timeout} millis`).pipe(
+                  Effect.map(() => ({ kind: "timeout" as const, code: null })),
+                ),
+              ])
 
-            if (exit.kind === "timeout") {
-              yield* handle.kill({ forceKillAfter: "3 seconds" }).pipe(Effect.orDie)
+              if (exit.kind === "timeout") {
+                yield* handle.kill({ forceKillAfter: "3 seconds" }).pipe(Effect.orDie)
+              }
+
+              return exit.kind === "exit" ? exit.code : null
             }
 
-            return exit.kind === "exit" ? exit.code : null
+            return yield* handle.exitCode
           }),
         ).pipe(Effect.orDie)
 
@@ -265,7 +271,7 @@ export const BackgroundShellTool = Tool.define(
         const result = yield* background.wait({ id: jobId })
         if (result.info?.status === "completed") return yield* inject("completed", result.info.output ?? "")
         if (result.info?.status === "error") return yield* inject("error", result.info.error ?? "")
-        if (result.info?.status === "cancelled") return yield* inject("cancelled", "Command was cancelled")
+        // cancelled jobs are silent — no notification sent to the LLM
       })
 
       yield* background.start({

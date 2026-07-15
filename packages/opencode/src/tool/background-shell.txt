@@ -11,6 +11,8 @@ When to use background mode:
 - Commands whose output you want to check incrementally via the log file
 - When you need to continue working while a command runs
 
+Use timeout: 0 for indefinite execution (dev servers, file watchers, etc.). The task runs until the process exits on its own, the AI cancels it, the user closes it via the TUI, or opencode is closed.
+
 You will be notified automatically when a background command finishes. Do NOT sleep or poll — use the "status" action only when you need to check intermediate output or confirm state before the notification arrives.
 
 The log file path returned by "start" and "status" (for running jobs) contains real-time output. Use the Read tool to inspect it when you need intermediate results.
